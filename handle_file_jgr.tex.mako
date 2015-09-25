@@ -53,7 +53,7 @@ if len(in_args['ifp']):
 in_argv = sys.argv + ifp_args
 in_args['list'] = '-list' in in_argv
 in_args['grow'] = 'right' if ('-grow' not in in_argv) else in_argv[in_argv.index('-grow')+1]
-in_args['style'] = 'descr' if ('-style' not in in_argv) else in_argv[in_argv.index('-style')+1]
+in_args['style'] = 'stmt' if ('-style' not in in_argv) else in_argv[in_argv.index('-style')+1]
 in_args['box'] = '-box' in in_argv
 in_args['thick'] = '-thick' in in_argv
 %>
@@ -72,7 +72,7 @@ in_args['thick'] = '-thick' in in_argv
 %%\usepackage[active, tightpage]{preview}
 \begin{document}
 %%\begin{preview}
-<%def name="gen_descr(thms)">
+<%def name="gen_list(thms)">
 	\begin{description}
 	% for thm in thms:
 	\item[${thm[2]}] \hfill \\ ${('({}) '.format(thm[1]) if thm[1] else '')+thm[3]}
@@ -81,7 +81,7 @@ in_args['thick'] = '-thick' in in_argv
 </%def>
 <%def name="gen_graph_body(thms, links, style='label')">
 % 	for thm in thms:
-% 		if style == 'descr':
+% 		if style == 'stmt':
 	${thm[0]}/{${break_lines(thm[3])}};
 % 		elif style == 'label':
 	${thm[0]}/{${thm[2]}};
@@ -111,7 +111,7 @@ in_args['thick'] = '-thick' in in_argv
 </%def>
 <%
 if in_args['list']:
-	gen_descr(in_thms)
+	gen_list(in_thms)
 else:
 	gen_graph(in_thms, in_links, in_args['style'])
 %>
