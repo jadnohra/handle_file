@@ -13,10 +13,12 @@ def read_data(ifp):
 				args = row[1:]
 			else:
 				if '->' in row:
-					lnk_from = []; lnk_to = []
-					lnk_ar = lnk_from
+					lnk_from = []; lnk_to = []; lnk_ar = lnk_from;
 					for x in row:
 						if x == '->':
+							if len(lnk_to):
+								links.append([lnk_from, lnk_to])
+								lnk_from = lnk_to; lnk_to = [];
 							lnk_ar = lnk_to
 						else:
 							lnk_ar.append(x)
