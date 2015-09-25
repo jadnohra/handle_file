@@ -89,11 +89,15 @@ def handle_jgr(fp,fn,fe):
 	tfiles = ['handle_file_jgr.tex.mako']
 	for tf in tfiles:
 		shutil.copy(tf, os.path.join('temp',tf))
-	sys.argv.append('-in'); sys.argv.append(fp)
-	_fp = os.path.join(os.path.dirname(hfp), os.path.join('temp', tfiles[0])); (_fn,_fe) = os.path.splitext(_fp);
-	handle_mako(_fp, _fn, _fe)
-	os.chdir(os.path.dirname(fp))
-	shutil.copy(_fp.replace(".tex.mako", ".pdf"), fn+".pdf" )
+	sys.argv.append('-in'); sys.argv.append(fp);
+	sys.argv.append('-list')
+	for aa in range(2):
+		if aa == 1:
+			sys.argv.remove('-list')
+		_fp = os.path.join(os.path.dirname(hfp), os.path.join('temp', tfiles[0])); (_fn,_fe) = os.path.splitext(_fp);
+		handle_mako(_fp, _fn, _fe)
+		os.chdir(os.path.dirname(fp))
+		shutil.copy(_fp.replace(".tex.mako", ".pdf"), "{}_{}{}".format(fn,aa+1,".pdf" ))
 def handle_shell(fp,fn,fe):
 	exe_command(fp, ['./'+os.path.basename(fp)], True)
 def do_handle():
