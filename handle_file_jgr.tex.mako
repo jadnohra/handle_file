@@ -7,7 +7,7 @@ import csv
 def read_data(ifp):
 	thms = []; links = []; thm = []; args = [];
 	with open(ifp, 'rb') as csvfile:
-		for row in csv.reader(csvfile, delimiter=' ', quotechar="'", escapechar="\\"):
+		for row in csv.reader(csvfile, delimiter=' ', quotechar="'", escapechar="|"):
 			#print row
 			if len(row) and row[0] == ';args':
 				args = row[1:]
