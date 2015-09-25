@@ -75,7 +75,7 @@ in_args['thick'] = '-thick' in in_argv
 <%def name="gen_list(thms)">
 	\begin{description}
 	% for thm in thms:
-	\item[${thm[2]}] \hfill \\ ${('({}) '.format(thm[1]) if thm[1] else '')+thm[3]}
+	\item[${thm[2]}] \hfill \\ ${('({}) '.format(thm[1]) if thm[1] else '')+break_lines(thm[3],240)}
 	% endfor
 	\end{description}
 </%def>
