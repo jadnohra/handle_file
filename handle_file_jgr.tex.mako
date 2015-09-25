@@ -5,25 +5,28 @@ import sys
 import csv
 
 def read_data(ifp):
-	thms = []; links = []; thm = [];
+	thms = []; links = []; thm = []; args = [];
 	with open(ifp, 'rb') as csvfile:
 		for row in csv.reader(csvfile, delimiter=' ', quotechar="'", escapechar="\\"):
 			#print row
-			if '->' in row:
-				lnk_from = []; lnk_to = []
-				lnk_ar = lnk_from
-				for x in row:
-					if x == '->':
-						lnk_ar = lnk_to
-					else:
-						lnk_ar.append(x)
-				links.append([lnk_from, lnk_to])
+			if len(row) and row[0] == ';args':
+				args = row[1:]
 			else:
-				for x in row:
-					thm.append(x)
-			if len(thm) == 4:
-				thms.append(thm); thm = [];
-	return thms,links
+				if '->' in row:
+					lnk_from = []; lnk_to = []
+					lnk_ar = lnk_from
+					for x in row:
+						if x == '->':
+							lnk_ar = lnk_to
+						else:
+							lnk_ar.append(x)
+					links.append([lnk_from, lnk_to])
+				else:
+					for x in row:
+						thm.append(x)
+				if len(thm) == 4:
+					thms.append(thm); thm = [];
+	return thms,links,args
 def break_txt(line, n = 48):
 	delims = [' ', ',', ';', '.']
 	lines = []
@@ -42,17 +45,19 @@ def break_lines(lines, n = 48):
 	return " \\\ ".join([break_txt(x, n) for x in lines])
 %>
 <%
-arg_list = '-list' in sys.argv
-arg_grow = 'right' if ('-grow' not in sys.argv) else sys.argv[sys.argv.index('-grow')+1]
-arg_style = 'descr' if ('-style' not in sys.argv) else sys.argv[sys.argv.index('-style')+1]
-arg_box = '-box' in sys.argv
-arg_thick = '-thick' in sys.argv
+in_args = {}
 in_thms = []; in_links = [];
-arg_ifp = 'lp_proofs.csv' if ('-in' not in sys.argv) else sys.argv[sys.argv.index('-in')+1]
-if len(arg_ifp):
-	in_thms, in_links = read_data(arg_ifp)
+in_args['ifp'] = 'lp_proofs.csv' if ('-in' not in sys.argv) else sys.argv[sys.argv.index('-in')+1]
+if len(in_args['ifp']):
+	in_thms, in_links, ifp_args = read_data(in_args['ifp'])
+in_argv = sys.argv + ifp_args
+in_args['list'] = '-list' in in_argv
+in_args['grow'] = 'right' if ('-grow' not in in_argv) else in_argv[in_argv.index('-grow')+1]
+in_args['style'] = 'descr' if ('-style' not in in_argv) else in_argv[in_argv.index('-style')+1]
+in_args['box'] = '-box' in in_argv
+in_args['thick'] = '-thick' in in_argv
 %>
-% if arg_list:
+% if in_args['list']:
 	\documentclass[border=0.5cm,varwidth]{standalone}
 % else:
 	\documentclass[border=0.5cm]{standalone}
@@ -92,11 +97,11 @@ if len(arg_ifp):
 </%def>
 %%\rule{\textwidth}{1pt}\newline\newline
 <%def name="gen_graph(thms, links, style='label')">
-\tikzset{grow'=${arg_grow}}
-%	if arg_box:
+\tikzset{grow'=${in_args['grow']}}
+%	if in_args['box']:
 \tikzset{every node/.style={draw}}
 %	endif
-%	if arg_thick:
+%	if in_args['thick']:
 \tikzset{every path/.style={draw, thick}}
 %	endif
 \tikz \graph [layered layout, nodes = {align=left}]
@@ -105,10 +110,10 @@ if len(arg_ifp):
 };
 </%def>
 <%
-if arg_list:
+if in_args['list']:
 	gen_descr(in_thms)
 else:
-	gen_graph(in_thms, in_links, arg_style)
+	gen_graph(in_thms, in_links, in_args['style'])
 %>
 %%\end{preview}
 \end{document}
