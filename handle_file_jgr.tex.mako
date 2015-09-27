@@ -1,16 +1,13 @@
-##lualatex handle_file_jgr.tex
-%% lualatex handle_file_jgr.tex
 <%
 import sys
 import csv
-
 def read_data(ifp):
 	thms = []; links = []; thm = []; args = [];
 	with open(ifp, 'rb') as csvfile:
 		for row in csv.reader(csvfile, delimiter=' ', quotechar="'", escapechar="|"):
 			#print row
-			if len(row) and row[0] == ';args':
-				args = row[1:]
+			if len(row) and row[0].lstrip().startswith(';'):
+				pass
 			else:
 				if '->' in row:
 					lnk_from = []; lnk_to = []; lnk_ar = lnk_from;
@@ -47,22 +44,30 @@ def break_lines(lines, n = 48):
 	return " \\\ ".join([break_txt(x, n) for x in lines])
 %>
 <%
+in_thms = []; in_links = []; in_argv = my_argv;
 in_args = {}
-in_thms = []; in_links = [];
-in_args['ifp'] = 'lp_proofs.csv' if ('-in' not in sys.argv) else sys.argv[sys.argv.index('-in')+1]
+in_args['ifp'] = in_argv[in_argv.index('-in')+1]
 if len(in_args['ifp']):
 	in_thms, in_links, ifp_args = read_data(in_args['ifp'])
-in_argv = sys.argv + ifp_args
+in_argv = in_argv + ifp_args
 in_args['list'] = '-list' in in_argv
+in_args['article'] = '-article' in in_argv
 in_args['grow'] = 'right' if ('-grow' not in in_argv) else in_argv[in_argv.index('-grow')+1]
 in_args['style'] = 'stmt' if ('-style' not in in_argv) else in_argv[in_argv.index('-style')+1]
 in_args['box'] = '-box' in in_argv
 in_args['thick'] = '-thick' in in_argv
 %>
+%%---
+%% tools: [lualatex]
+%%...
 % if in_args['list']:
-	\documentclass[border=0.5cm,varwidth]{standalone}
+% 	if in_args['article']:
+\documentclass{article}
+%	else:
+\documentclass[border=0.5cm,varwidth]{standalone}
+% 	endif
 % else:
-	\documentclass[border=0.5cm]{standalone}
+\documentclass[border=0.5cm]{standalone}
 % endif
 \usepackage{amssymb}
 \usepackage{tikz}
