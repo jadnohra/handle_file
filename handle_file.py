@@ -36,6 +36,22 @@ def mktemp():
 		os.mkdir(fptemp())
 def repext(fp, ext):
 	return os.path.splitext(fp)[0]+ext
+def break_txt(line, n = 48, endl = '\n'):
+	delims = [' ', ',', ';', '.']
+	lines = []
+	while len(line):
+	 for i in range(len(line)):
+	  if line[i] in delims or i+1 == len(line):
+		word = line[:i+1]; line = line[i+1:]
+		if len(lines) > 0 and (len(lines[-1])+len(word) <= n or (word[-1] != ' ' and lines[-1][-1] == ' ') ):
+		  lines[-1] = lines[-1] + word
+		else:
+		  lines.append(word.lstrip())
+		break
+	return endl.join(lines)
+def break_lines(lines, n = 48, endl = '\n'):
+	lines = lines.split("\n")
+	return endl.join([break_txt(x, n, endl) for x in lines])
 def handle_generic(fp,fn,fe):
 	print 'Unknown extension for [{}]'.format(fp)
 def extract_command_multiline(fp,comt):
@@ -159,6 +175,9 @@ def do_handle(fp):
 	(fn,fe) = os.path.splitext(sys.argv[1])
 	if g_dbg:
 		print 'fp,(fn,fe) = ', fp,(fn,fe)
+	if '-jbu_direct' in sys.argv:
+		handle_jbu_direct(fp,fn,fe)
+		return
 	k_ext_handlers.get(fe, handle_generic)(fp,fn,fe)
 def jbu_jgr_to_tex(args, tmp_files, fp):
 	fpo = jbu_gen_tmpfile(tmp_files, '.tex'); efpo = jbu_expect(fpo);
@@ -206,6 +225,16 @@ def jbu_md_to_pdf(args, tmp_files, fp):
 	mdtool = 'pandoc'
 	exe_command(fp, [' '.join([mdtool, fp, '-o', fpo] + args)])
 	fpo2 = [fpo, jbu_expect_check(efpo)]; tmp_files.append(fpo2); return fpo2;
+def jbu_wrap_single(args, tmp_files, fp):
+	fpo = jbu_gen_tmpfile(tmp_files, os.path.splitext(fp)[1]); efpo = jbu_expect(fpo);
+	wrap_n = int(args[0]) if len(args) else 48
+	lines = []
+	with open(fp, 'r') as ifp:
+		lines = ifp.readlines()
+	text = break_lines(''.join(lines).replace(' \n', ' ').replace('\n ', ' ').replace('\n', ''), wrap_n)
+	with open(fpo, 'w') as ofp:
+		ofp.write(text)
+	fpo2 = [fpo, jbu_expect_check(efpo)]; tmp_files.append(fpo2); return fpo2;
 def jbu_concat_pdf(args, tmp_files, fgroups):
 	fgo = []
 	for files in fgroups:
@@ -215,6 +244,17 @@ def jbu_concat_pdf(args, tmp_files, fgroups):
 		ifiles = [x[0] for x in files if x[1]]
 		exe_command(fpo, [' '.join([concattool, '--output', fpo]+ifiles)], True)
 		fpo = [[fpo, jbu_expect_check(efpo)]]; tmp_files.append(fpo);
+		fgo.append(fpo)
+	return fgo
+def jbu_wrap(args, tmp_files, fgroups):
+	fgo = []
+	for files in fgroups:
+		fpo = []
+		for (fp, fpok) in files:
+			if fpok:
+				fpo.append(jbu_wrap_single(args, tmp_files, fp))
+			else:
+				fpo.append(['', False])
 		fgo.append(fpo)
 	return fgo
 def jbu_to_tex(args, tmp_files, fgroups):
@@ -309,6 +349,8 @@ def jbu_handle(cmd, ctx, fgroups):
 		return jbu_concat_pdf(args, ctx['tmp_files'], fgroups)
 	elif cmd.split()[0] == 'include':
 		return jbu_include(args, ctx['cfg'], ctx['tmp_files'], fgroups)
+	elif cmd.split()[0] == 'wrap':
+		return jbu_wrap(args, ctx['tmp_files'], fgroups)
 	return jbu_fail_fgo()
 def jbu_parse_line(fvars,line):
 	if line.lstrip().startswith('#'):
@@ -366,24 +408,27 @@ def jbu_exec_part(ctx, cmd, cmd_i, cmd_n):
 			else:
 				cmd_res = 2
 	return cmd_res
-def handle_jbu(base, fvars, lines):
+def handle_jbu(base, fvars, lines, use_yaml = True):
 	cmd_res_cols = ['red', 'green', 'magenta', 'cyan']
 	mktemp()
 	chains = []
-	in_yaml = False; yaml_lines = [];
 	yaml_cfg = {}
-	for line in lines:
-		if in_yaml or line.strip() == '---':
-			if line.strip() == '...':
-				in_yaml = False
-				yaml_cfg = yaml.load(''.join(yaml_lines))
-			else:
-				if in_yaml:
-					yaml_lines.append(line)
-				in_yaml = True
-		else:
-			if len(line.strip()):
-				chains.append(jbu_parse_line(fvars,line.strip()))
+	if use_yaml:
+		in_yaml = False; yaml_lines = [];
+		for line in lines:
+			if in_yaml or line.strip() == '---':
+				if line.strip() == '...':
+					in_yaml = False
+					yaml_cfg = yaml.load(''.join(yaml_lines))
+				else:
+					if in_yaml:
+						yaml_lines.append(line)
+					in_yaml = True
+		jbu_lines = yaml_cfg.get('jbu', '').split('\n')
+	else:
+		jbu_lines = lines
+	for line in [x.strip() for x in jbu_lines if len(x.strip())]:
+		chains.append(jbu_parse_line(fvars,line.strip()))
 	tmp_files = []; file_dict = {}; stack_fgroups = [];
 	ctx = {'base':base, 'tmp_files':tmp_files, 'file_dict':file_dict, 'stack_fgroups':stack_fgroups, 'cfg':yaml_cfg }
 	for (chain, ochain) in chains:
@@ -404,12 +449,15 @@ def handle_jbu(base, fvars, lines):
 		for p in pp:
 			set_vt_col('default' if p[1] else 'red'); print "'{}' ".format(p[0]);
 		set_vt_col('default')
-def handle_jbu_lines(fp,fn,fe,lines):
+def handle_jbu_lines(fp,fn,fe,lines, use_yaml = True):
 	fvars = {}
 	fvars['{self}'] = os.path.basename(fp)
 	fvars['{self.}'] = os.path.splitext(os.path.basename(fp))[0]
 	base = os.path.dirname(fp)
-	handle_jbu(base, fvars, lines)
+	handle_jbu(base, fvars, lines, use_yaml)
+def handle_jbu_direct(fp,fn,fe):
+	line = ' '.join(sys.argv[sys.argv.index('-jbu_direct')+1:])
+	handle_jbu_lines(fp,fn,fe,[line], False)
 def handle_jbu_file(fp,fn,fe):
 	lines = []
 	with open(fp, "r") as ifile:
