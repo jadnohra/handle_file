@@ -127,6 +127,8 @@ def handle_graphviz(fp,fn,fe):
 	handle_embed_command(fp,fn,fe,['//'])
 def handle_python(fp,fn,fe):
 	handle_embed_command(fp,fn,fe,['#'])
+def handle_lzt(fp,fn,fe):
+	handle_embed_command(fp,fn,fe,['#'])
 def handle_mako(fp,fn,fe):
 	if mako_temp:
 		os.chdir(os.path.dirname(fp))
@@ -171,7 +173,7 @@ def jbu_gen_tmpfile(tmp_files, ext):
 def do_handle(fp):
 	k_ext_handlers = {'.md': handle_md, '.tex': handle_tex, '.gv': handle_graphviz
 		, '.py': handle_python, '.sh': handle_shell, '.mako': handle_mako
-		, '.jgr': handle_jgr, '.jbu': handle_jbu}
+		, '.jgr': handle_jgr, '.jbu': handle_jbu, '.lzt': handle_lzt}
 	(fn,fe) = os.path.splitext(sys.argv[1])
 	if g_dbg:
 		print 'fp,(fn,fe) = ', fp,(fn,fe)
@@ -225,6 +227,11 @@ def jbu_md_to_pdf(args, tmp_files, fp):
 	mdtool = 'pandoc'
 	exe_command(fp, [' '.join([mdtool, fp, '-o', fpo] + args)])
 	fpo2 = [fpo, jbu_expect_check(efpo)]; tmp_files.append(fpo2); return fpo2;
+def jbu_lzt_to_md(args, tmp_files, fp):
+	fpo = jbu_gen_tmpfile(tmp_files, '.md'); efpo = jbu_expect(fpo);
+	mdtool = fpjoinhere(['lztex'])
+	exe_command(fp, [' '.join([mdtool, fp, '-o', fpo] + args)])
+	fpo2 = [fpo, jbu_expect_check(efpo)]; tmp_files.append(fpo2); return fpo2;
 def jbu_wrap_single(args, tmp_files, fp):
 	fpo = jbu_gen_tmpfile(tmp_files, os.path.splitext(fp)[1]); efpo = jbu_expect(fpo);
 	wrap_n = int(args[0]) if len(args) else 48
@@ -271,6 +278,20 @@ def jbu_to_tex(args, tmp_files, fgroups):
 				fpo.append(['', False])
 		fgo.append(fpo)
 	return fgo
+def jbu_to_md(args, tmp_files, fgroups):
+	fgo = []
+	for files in fgroups:
+		fpo = []
+		for (fp, fpok) in files:
+			if fpok:
+				if fp.endswith('.md'):
+					fpo.append([fp, fpok])
+				if fp.endswith('.lzt'):
+					fpo.append(jbu_lzt_to_md(args, tmp_files, fp))
+			else:
+				fpo.append(['', False])
+		fgo.append(fpo)
+	return fgo
 def jbu_to_pdf(args, tmp_files, fgroups):
 	fgo = []
 	for files in fgroups:
@@ -283,6 +304,12 @@ def jbu_to_pdf(args, tmp_files, fgroups):
 					(tex, texok) = jbu_jgr_to_tex(args, tmp_files, fp)
 					if texok:
 						fpo.append(jbu_tex_to_pdf(args, tmp_files, tex))
+					else:
+						fpo.append(['', False])
+				elif fp.endswith('.lzt'):
+					(md, mdok) = jbu_lzt_to_md(args, tmp_files, fp)
+					if mdok:
+						fpo.append(jbu_md_to_pdf(args, tmp_files, md))
 					else:
 						fpo.append(['', False])
 				elif fp.endswith('.tex'):
@@ -339,6 +366,8 @@ def jbu_handle(cmd, ctx, fgroups):
 		return fgroups
 	elif cmd.split()[0] == 'tex':
 		return jbu_to_tex(args, ctx['tmp_files'], fgroups)
+	elif cmd.split()[0] == 'md':
+		return jbu_to_md(args, ctx['tmp_files'], fgroups)
 	elif cmd.split()[0] == 'pdf':
 		return jbu_to_pdf(args, ctx['tmp_files'], fgroups)
 	elif cmd.split()[0] == 'with':
