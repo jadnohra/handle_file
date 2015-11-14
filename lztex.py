@@ -47,7 +47,7 @@ def endlvl(lvl):
 	for l in reversed(lvl['lines'][1:]):
 		print l
 def main():
-	k_titles = ['list', 'notes', 'sections', 'copy']
+	k_titles = ['list', 'bullets', 'notes', 'sections', 'copy']
 	ifp = largv[1]
 	ofp = os.path.splitext(ifp)[0]+'.tex'
 	lvld = []; file_start = True;
@@ -99,7 +99,7 @@ def main():
 			print >>fout, ''.join(['#']*(lvl_state['section'])),
 		elif lvl['title'] == 'notes':
 			print >>fout, '\\begin{note}'
-		elif lvl['title'] == 'list':
+		elif lvl['title'] == 'list' or lvl['title'] == 'bullets':
 			print >>fout, '\\item'
 		lvl['has_open_line'] = True
 	def end_line(lvl, line):
@@ -108,11 +108,16 @@ def main():
 		lvl['has_open_line'] = False
 	def begin_lvl(lvl, lvl_state):
 		if lvl['ctd_from'] != -1:
+			if clvld[lvl['ctd_from']]['has_open_line']:
+				end_line(lvl, '')
+				clvld[lvl['ctd_from']]['has_open_line'] = False
 			return
 		if lvl['title'] == 'sections':
 			lvl_state['section'] = lvl_state['section']+1
 		elif lvl['title'] == 'list':
 			print >>fout, '\\begin{enumerate}'
+		elif lvl['title'] == 'bullets':
+			print >>fout, '\\begin{itemize}'
 	def end_lvl(lvl, lvl_state):
 		if lvl['ctd_to'] != -1:
 			return
@@ -120,8 +125,10 @@ def main():
 			end_line(lvl, '')
 		if lvl['title'] == 'sections':
 			lvl_state['section'] = lvl_state['section']-1
-		if lvl['title'] == 'list':
+		elif lvl['title'] == 'list':
 			print >>fout, '\\end{enumerate}'
+		elif lvl['title'] == 'bullets':
+			print >>fout, '\\end{itemize}'
 	for lvl in clvld:
 		if lvl['lvl'] < plvl:
 			while len(close_stack) and close_stack[-1]['lvl'] > lvl['lvl']:
