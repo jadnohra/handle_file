@@ -47,7 +47,7 @@ def endlvl(lvl):
 	for l in reversed(lvl['lines'][1:]):
 		print l
 def main():
-	k_titles = ['list', 'bullets', 'notes', 'sections', 'copy']
+	k_titles = ['list', 'bullets', 'notes', 'sections', 'copy', 'tex', 'comments']
 	ifp = largv[1]
 	ofp = os.path.splitext(ifp)[0]+'.tex'
 	lvld = []; file_start = True;
@@ -106,6 +106,9 @@ def main():
 		if lvl['title'] == 'notes':
 			print >>fout, '\\end{note}'
 		lvl['has_open_line'] = False
+	def do_line(lvl, line, lvl_state):
+		if lvl['title'] != 'comments':
+			print >>fout, line[0]
 	def begin_lvl(lvl, lvl_state):
 		if lvl['ctd_from'] != -1:
 			if clvld[lvl['ctd_from']]['has_open_line']:
@@ -118,6 +121,8 @@ def main():
 			print >>fout, '\\begin{enumerate}'
 		elif lvl['title'] == 'bullets':
 			print >>fout, '\\begin{itemize}'
+		elif lvl['title'] == 'tex':
+			print >>fout, '\\begin{identity}'
 	def end_lvl(lvl, lvl_state):
 		if lvl['ctd_to'] != -1:
 			return
@@ -129,6 +134,8 @@ def main():
 			print >>fout, '\\end{enumerate}'
 		elif lvl['title'] == 'bullets':
 			print >>fout, '\\end{itemize}'
+		elif lvl['title'] == 'tex':
+			print >>fout, '\\end{identity}'
 	for lvl in clvld:
 		if lvl['lvl'] < plvl:
 			while len(close_stack) and close_stack[-1]['lvl'] > lvl['lvl']:
@@ -138,7 +145,7 @@ def main():
 			begin_line(lvl, line, lvl_state)
 			if g_dbg:
 				print ''.join(['-']*(lvl['lvl'])),
-			print >>fout, line[0]
+			do_line(lvl, line, lvl_state)
 		close_stack.append(lvl); plvl = lvl['lvl'];
 	for lvl in reversed(close_stack):
 		end_lvl(lvl, lvl_state)
