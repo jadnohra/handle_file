@@ -47,7 +47,7 @@ def endlvl(lvl):
 	for l in reversed(lvl['lines'][1:]):
 		print l
 def main():
-	k_titles = ['list', 'bullets', 'notes', 'sections', 'copy', 'tex', 'comments']
+	k_titles = ['list', 'bullets', 'notes', 'sections', 'copy', 'tex', 'comments', 'table']
 	ifp = largv[1]
 	ofp = os.path.splitext(ifp)[0]+'.tex'
 	lvld = []; file_start = True;
@@ -84,7 +84,7 @@ def main():
 					#print '>>>', ctdi, title, clvld[ctdi]
 				else:
 					ctdi = -1
-			clvld.append({'lvl':lvl[0], 'lines':[ [lvl[1], lvl[2]] ], 'title':title, 'ctd_from':ctdi, 'ctd_to':-1, 'has_open_line':False})
+			clvld.append({'lvl':lvl[0], 'lines':[ [lvl[1], lvl[2]] ], 'title':title, 'ctd_from':ctdi, 'ctd_to':-1, 'has_open_line':False, 'counter':0})
 			plvl = lvl[0]
 	plvl = -1; lvl_state = {'section':0};
 	close_stack = []
@@ -100,14 +100,32 @@ def main():
 		elif lvl['title'] == 'notes':
 			print >>fout, '\\begin{note}'
 		elif lvl['title'] == 'list' or lvl['title'] == 'bullets':
-			print >>fout, '\\item'
+			print >>fout, '\\item',
 		lvl['has_open_line'] = True
 	def end_line(lvl, line):
 		if lvl['title'] == 'notes':
 			print >>fout, '\\end{note}'
 		lvl['has_open_line'] = False
+		lvl['counter'] = lvl['counter'] + 1
 	def do_line(lvl, line, lvl_state):
-		if lvl['title'] != 'comments':
+		if lvl['title'] == 'comments':
+			pass
+		elif lvl['title'] == 'table':
+			if lvl['counter'] == 0:
+				print >>fout, line[0]
+			elif line[0] == '-' or line[0] == '--':
+				if lvl['row_cnt'] > 0:
+					print >>fout, '\\\\'
+				if line[0] == '--':
+					print >>fout, '\hline'
+				lvl['row_cnt'] = lvl['row_cnt'] + 1
+				lvl['col_cnt'] = 0
+			else:
+				if lvl['col_cnt'] > 0:
+					print >>fout, '& ',
+				print >>fout, line[0]
+				lvl['col_cnt'] = lvl['col_cnt'] + 1
+		else:
 			print >>fout, line[0]
 	def begin_lvl(lvl, lvl_state):
 		if lvl['ctd_from'] != -1:
@@ -121,6 +139,9 @@ def main():
 			print >>fout, '\\begin{enumerate}'
 		elif lvl['title'] == 'bullets':
 			print >>fout, '\\begin{itemize}'
+		elif lvl['title'] == 'table':
+			lvl['row_cnt'] = 0
+			print >>fout, '\\begin{tabular}',
 		elif lvl['title'] == 'tex':
 			print >>fout, '\\begin{identity}'
 	def end_lvl(lvl, lvl_state):
@@ -134,6 +155,8 @@ def main():
 			print >>fout, '\\end{enumerate}'
 		elif lvl['title'] == 'bullets':
 			print >>fout, '\\end{itemize}'
+		elif lvl['title'] == 'table':
+			print >>fout, '\\end{tabular}'
 		elif lvl['title'] == 'tex':
 			print >>fout, '\\end{identity}'
 	for lvl in clvld:
