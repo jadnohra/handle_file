@@ -96,7 +96,7 @@ def main():
 		if lvl['has_open_line']:
 			end_line(lvl, '')
 		if lvl['title'] == 'sections':
-			print >>fout, ''.join(['#']*(lvl_state['section'])),
+			print >>fout, '\n', ''.join(['#']*(lvl_state['section'])),
 		elif lvl['title'] == 'notes':
 			print >>fout, '\\begin{note}'
 		elif lvl['title'] == 'list' or lvl['title'] == 'bullets':
