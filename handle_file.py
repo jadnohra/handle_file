@@ -115,8 +115,9 @@ def do_jbu_hook(fp,fn,fe,exec_cmd):
 			handle_jbu_lines(fp,fn,fe, exec_cmd)
 			return True
 	return False
-def handle_embed_command(fp,fn,fe,comt):
+def handle_embed_command(fp,fn,fe,comt,dflt_cmd=[]):
 	exec_cmd = extract_command(fp, comt)
+	exec_cmd = exec_cmd if len(exec_cmd) else dflt_cmd
 	if do_jbu_hook(fp,fn,fe,exec_cmd) == False:
 		exe_command(fp, exec_cmd, False, False, True)
 def handle_md(fp,fn,fe):
@@ -129,6 +130,9 @@ def handle_python(fp,fn,fe):
 	handle_embed_command(fp,fn,fe,['#'])
 def handle_lzt(fp,fn,fe):
 	handle_embed_command(fp,fn,fe,['#'])
+def handle_frt(fp,fn,fe):
+	dflt_cmd = ['./frt_template.tex -[with {self}]-[inject]-[pdf]-> {self.}.pdf']
+	handle_embed_command(fp,fn,fe,['%'], dflt_cmd)
 def handle_mako(fp,fn,fe):
 	if mako_temp:
 		os.chdir(os.path.dirname(fp))
@@ -173,7 +177,8 @@ def jbu_gen_tmpfile(tmp_files, ext):
 def do_handle(fp):
 	k_ext_handlers = {'.md': handle_md, '.tex': handle_tex, '.gv': handle_graphviz
 		, '.py': handle_python, '.sh': handle_shell, '.mako': handle_mako
-		, '.jgr': handle_jgr, '.jbu': handle_jbu, '.lzt': handle_lzt}
+		, '.jgr': handle_jgr, '.jbu': handle_jbu, '.lzt': handle_lzt,
+		'.frt': handle_frt}
 	(fn,fe) = os.path.splitext(sys.argv[1])
 	if g_dbg:
 		print 'fp,(fn,fe) = ', fp,(fn,fe)
@@ -192,9 +197,10 @@ def jbu_jgr_to_tex(args, tmp_files, fp):
 		 print(traceback.format_exc())
 	fpo2 = [fpo, jbu_expect_check(efpo)]; tmp_files.append(fpo2); return fpo2;
 def yaml_cmds(_cmds):
-	cmds = _cmds; cmds[0] = cmds[0].lstrip(); cmds[-1] = cmds[-1].lstrip();
 	try:
-		return yaml.load(''.join(cmds))
+		cmds = _cmds; cmds[0] = cmds[0].lstrip(); cmds[-1] = cmds[-1].lstrip();
+		cmds = yaml.load(''.join(cmds))
+		return cmds if cmds else {}
 	except:
 		return {}
 def jbu_extract_tools(fp, cmt):
@@ -215,6 +221,7 @@ def jbu_tex_to_pdf(args, tmp_files, fp):
 	exec_cmd = [' '.join([textool, fp] + args)]
 	fptoolout = repext(fp, '.pdf')
 	efpo = jbu_expect(fptoolout)
+	#print exec_cmd
 	outs = exe_command(fp, exec_cmd, False, True)
 	shutil.copy(fptoolout, fpo)
 	fpo2 = [fpo, jbu_expect_check(efpo)]; tmp_files.append(fpo2);
@@ -328,7 +335,7 @@ def jbu_include_tex(fo, args, cfg, tmp_files, files):
 	arg_recipe = '' if ('-recipe' not in args) else args[args.index('-recipe')+1]
 	pre_recipe = cfg.get(arg_recipe, r"{\includegraphics[]{jbu_1}}")
 	if fo[1]:
-		fpo = fpo = jbu_gen_tmpfile(tmp_files, '.tex')
+		fpo = jbu_gen_tmpfile(tmp_files, '.tex')
 		shutil.copy(fo[0], fpo)
 		#print 'fpo', fpo, files
 		for line in fileinput.input(fpo, inplace=1):
@@ -351,6 +358,43 @@ def jbu_include(args, cfg, tmp_files, fgroups):
 	for fo in fgroups[0]:
 		if fo[0].endswith('.tex'):
 			fgo.append(jbu_include_tex(fo, args, cfg, tmp_files, fgroups[1]))
+		else:
+			fgo.append(jbu_fail_files)
+	return fgo
+def jbu_inject_tex(fo, args, cfg, tmp_files, files):
+	def read_inject_content(fp):
+		lines = []
+		with open(fp, "r") as ifile:
+			lines = ifile.readlines()
+		rem_indices = []
+		for index in sorted(rem_indices, reverse=True):
+			lines.pop(index)
+		return ''.join(lines)
+	arg_recipe = '' if ('-recipe' not in args) else args[args.index('-recipe')+1]
+	pre_recipe = cfg.get(arg_recipe, r"jbu_1")
+	if fo[1]:
+		fpo = jbu_gen_tmpfile(tmp_files, '.tex')
+		shutil.copy(fo[0], fpo)
+		#print 'fpo', fpo, files
+		for line in fileinput.input(fpo, inplace=1):
+			if '\end{document}' not in line:
+				print line,
+			else:
+				for fpi in [x[0] for x in files if x[1]]:
+					recipe = pre_recipe.replace('jbu_1', read_inject_content(fpi))
+					print recipe
+				print line,
+		tmp_files.append([fpo, True])
+		return [[fpo, True]]
+	else:
+		return jbu_fail_files()
+def jbu_inject(args, cfg, tmp_files, fgroups):
+	fgo = []
+	if len(fgroups) != 2:
+		return jbu_fail_fgo()
+	for fo in fgroups[0]:
+		if fo[0].endswith('.tex'):
+			fgo.append(jbu_inject_tex(fo, args, cfg, tmp_files, fgroups[1]))
 		else:
 			fgo.append(jbu_fail_files)
 	return fgo
@@ -378,6 +422,8 @@ def jbu_handle(cmd, ctx, fgroups):
 		return jbu_concat_pdf(args, ctx['tmp_files'], fgroups)
 	elif cmd.split()[0] == 'include':
 		return jbu_include(args, ctx['cfg'], ctx['tmp_files'], fgroups)
+	elif cmd.split()[0] == 'inject':
+		return jbu_inject(args, ctx['cfg'], ctx['tmp_files'], fgroups)
 	elif cmd.split()[0] == 'wrap':
 		return jbu_wrap(args, ctx['tmp_files'], fgroups)
 	return jbu_fail_fgo()
@@ -437,23 +483,32 @@ def jbu_exec_part(ctx, cmd, cmd_i, cmd_n):
 			else:
 				cmd_res = 2
 	return cmd_res
+def find_jbu_yaml_lines(lines):
+	in_yaml = False; yaml_lines = [];
+	li = 0
+	for line in lines:
+		if in_yaml or line.strip() == '---':
+			if line.strip() == '...':
+				in_yaml = False
+			else:
+				if in_yaml:
+					yaml_lines.append(li)
+				in_yaml = True
+		li = li+1
+	return yaml_lines
 def handle_jbu(base, fvars, lines, use_yaml = True):
 	cmd_res_cols = ['red', 'green', 'magenta', 'cyan']
 	mktemp()
 	chains = []
 	yaml_cfg = {}
 	if use_yaml:
-		in_yaml = False; yaml_lines = [];
-		for line in lines:
-			if in_yaml or line.strip() == '---':
-				if line.strip() == '...':
-					in_yaml = False
-					yaml_cfg = yaml.load(''.join(yaml_lines))
-				else:
-					if in_yaml:
-						yaml_lines.append(line)
-					in_yaml = True
-		jbu_lines = yaml_cfg.get('jbu', '').split('\n')
+		yaml_lines = [lines[x] for x in find_jbu_yaml_lines(lines)]
+		yaml_cfg = yaml.load(''.join(yaml_lines))
+		if yaml_cfg:
+			jbu_lines = yaml_cfg.get('jbu', '').split('\n')
+		else:
+			yaml_cfg = {}
+			jbu_lines = lines
 	else:
 		jbu_lines = lines
 	for line in [x.strip() for x in jbu_lines if len(x.strip())]:
