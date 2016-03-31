@@ -1,4 +1,4 @@
-import os,sys,os.path
+import os,sys,os.path,subprocess
 
 g_dbg = '-dbg' in sys.argv or False
 g_verbose = '-verbose' in sys.argv or False
@@ -37,19 +37,29 @@ def largv_geti(i, dflt):
 	if (i >= len(largv)):
 		return dflt
 	return largv[i]
+def fphere():
+	return os.path.dirname(os.path.realpath(__file__))
 def main():
 	ifp = largv[1]
-	ofd = os.path.dirname(ifp)
-	ofile = None
+	ofd = os.path.dirname(os.path.realpath(ifp))
+	ofp = ''; ofile = None; do_handle = False;
+	handletool = os.path.join(fphere(), 'handle_file.sh')
 	with open(ifp, "r") as ifile:
 		for line in ifile.readlines():
-			if line.startswith('--[') and line.rstrip().endswith(']'):
+			if (line.startswith('--[') or line.startswith('-=['))  and line.rstrip().endswith(']'):
 				if ofile:
 					ofile.close()
-				ofp = line[len('--['):-2]
-				ofile = open(os.path.join(ofd, ofp), "w")
+					if (do_handle):
+						pop_in = [handletool, ofp]
+						#print ''; sys.stdout.flush();
+						pop = subprocess.Popen(pop_in)
+						pop.wait()
+						#print ''
+				do_handle = line.startswith('-=[')
+				ofn = line[len('--['):-2]; ofp = os.path.join(ofd, ofn);
+				ofile = open(ofp, "w")
 				if g_dbg or g_verbose:
-					set_vt_col('green'); print ' {}'.format(ofp); set_vt_col('default');
+					set_vt_col('yellow'); print ' {}'.format(ofn); set_vt_col('default'); sys.stdout.flush();
 			else:
 				if line.startswith('--#') == False:
 					ofile.write(line)
