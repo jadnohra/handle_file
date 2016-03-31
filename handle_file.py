@@ -126,6 +126,8 @@ def handle_tex(fp,fn,fe):
 	handle_embed_command(fp,fn,fe,['%'])
 def handle_graphviz(fp,fn,fe):
 	handle_embed_command(fp,fn,fe,['//'])
+def handle_multi(fp,fn,fe):
+	handle_embed_command(fp,fn,fe,['--#'])
 def handle_python(fp,fn,fe):
 	handle_embed_command(fp,fn,fe,['#'])
 def handle_lzt(fp,fn,fe):
@@ -178,7 +180,7 @@ def do_handle(fp):
 	k_ext_handlers = {'.md': handle_md, '.tex': handle_tex, '.gv': handle_graphviz
 		, '.py': handle_python, '.sh': handle_shell, '.mako': handle_mako
 		, '.jgr': handle_jgr, '.jbu': handle_jbu, '.lzt': handle_lzt,
-		'.frt': handle_frt}
+		'.frt': handle_frt, '.multi': handle_multi}
 	(fn,fe) = os.path.splitext(sys.argv[1])
 	if g_dbg:
 		print 'fp,(fn,fe) = ', fp,(fn,fe)
@@ -455,7 +457,7 @@ def jbu_handle(cmd, ctx, fgroups):
 	elif cmd.split()[0] == 'png':
 		return jbu_to_png(args, ctx['tmp_files'], fgroups)
 	elif cmd.split()[0] == 'jpeg':
-		return jbu_to_jpeg(args, ctx['tmp_files'], fgroups)	
+		return jbu_to_jpeg(args, ctx['tmp_files'], fgroups)
 	elif cmd.split()[0] == 'with':
 		return jbu_with(args, ctx, fgroups)
 	elif cmd.split()[0] == 'dict':
