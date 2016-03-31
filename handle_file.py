@@ -234,6 +234,11 @@ def jbu_pdf_to_png(args, tmp_files, fp):
 	pngtool = 'convert'
 	exe_command(fp, [' '.join([pngtool, '-density', '300', '-alpha', 'remove', fp, fpo] + args)])
 	fpo2 = [fpo, jbu_expect_check(efpo)]; tmp_files.append(fpo2); return fpo2;
+def jbu_pdf_to_jpeg(args, tmp_files, fp):
+	fpo = jbu_gen_tmpfile(tmp_files, '.jpeg'); efpo = jbu_expect(fpo);
+	pngtool = 'convert'
+	exe_command(fp, [' '.join([pngtool, '-density', '300', '-alpha', 'remove', fp, fpo] + args)])
+	fpo2 = [fpo, jbu_expect_check(efpo)]; tmp_files.append(fpo2); return fpo2;
 def jbu_md_to_pdf(args, tmp_files, fp):
 	fpo = jbu_gen_tmpfile(tmp_files, '.pdf'); efpo = jbu_expect(fpo);
 	mdtool = 'pandoc'
@@ -314,6 +319,20 @@ def jbu_to_png(args, tmp_files, fgroups):
 					fpo.append([fp, fpok])
 				if fp.endswith('.pdf'):
 					fpo.append(jbu_pdf_to_png(args, tmp_files, fp))
+			else:
+				fpo.append(['', False])
+		fgo.append(fpo)
+	return fgo
+def jbu_to_jpeg(args, tmp_files, fgroups):
+	fgo = []
+	for files in fgroups:
+		fpo = []
+		for (fp, fpok) in files:
+			if fpok:
+				if fp.endswith('.jpeg'):
+					fpo.append([fp, fpok])
+				if fp.endswith('.pdf'):
+					fpo.append(jbu_pdf_to_jpeg(args, tmp_files, fp))
 			else:
 				fpo.append(['', False])
 		fgo.append(fpo)
@@ -435,6 +454,8 @@ def jbu_handle(cmd, ctx, fgroups):
 		return jbu_to_pdf(args, ctx['tmp_files'], fgroups)
 	elif cmd.split()[0] == 'png':
 		return jbu_to_png(args, ctx['tmp_files'], fgroups)
+	elif cmd.split()[0] == 'jpeg':
+		return jbu_to_jpeg(args, ctx['tmp_files'], fgroups)	
 	elif cmd.split()[0] == 'with':
 		return jbu_with(args, ctx, fgroups)
 	elif cmd.split()[0] == 'dict':
