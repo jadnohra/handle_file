@@ -67,7 +67,10 @@ def main():
 				do_handle = line.startswith('-=[')
 				ofn = line[len('--['):-2]; ofp = os.path.join(ofd, ofn);
 				if do_handle and not g_no_cache:
-					old_md5 = hashlib.md5(open(ofp, 'r').read()).hexdigest()
+					if os.path.exists(ofp):
+						old_md5 = hashlib.md5(open(ofp, 'r').read()).hexdigest()
+					else:
+						old_md5 = None	
 				ofile = open(ofp, "w")
 				find = find+1
 				if g_dbg or g_verbose:
