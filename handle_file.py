@@ -131,7 +131,7 @@ def handle_python(fp,fn,fe):
 def handle_lzt(fp,fn,fe):
 	handle_embed_command(fp,fn,fe,['#'])
 def handle_frt(fp,fn,fe):
-	dflt_cmd = ['./frt_template.tex -[with {self}]-[inject]-[pdf]-> {self.}.pdf']
+	dflt_cmd = ['./frt_template.tex -[with {self}]-[inject]-[pdf]-[png]-> {self.}.png']
 	handle_embed_command(fp,fn,fe,['%'], dflt_cmd)
 def handle_mako(fp,fn,fe):
 	if mako_temp:
@@ -229,6 +229,11 @@ def jbu_tex_to_pdf(args, tmp_files, fp):
 		print 'captured log of: [{}]'.format(exec_cmd)
 		print outs[0][0]; print outs[0][1];
 	return fpo2;
+def jbu_pdf_to_png(args, tmp_files, fp):
+	fpo = jbu_gen_tmpfile(tmp_files, '.png'); efpo = jbu_expect(fpo);
+	pngtool = 'convert'
+	exe_command(fp, [' '.join([pngtool, '-density', '300', '-alpha', 'remove', fp, fpo] + args)])
+	fpo2 = [fpo, jbu_expect_check(efpo)]; tmp_files.append(fpo2); return fpo2;
 def jbu_md_to_pdf(args, tmp_files, fp):
 	fpo = jbu_gen_tmpfile(tmp_files, '.pdf'); efpo = jbu_expect(fpo);
 	mdtool = 'pandoc'
@@ -295,6 +300,20 @@ def jbu_to_md(args, tmp_files, fgroups):
 					fpo.append([fp, fpok])
 				if fp.endswith('.lzt'):
 					fpo.append(jbu_lzt_to_md(args, tmp_files, fp))
+			else:
+				fpo.append(['', False])
+		fgo.append(fpo)
+	return fgo
+def jbu_to_png(args, tmp_files, fgroups):
+	fgo = []
+	for files in fgroups:
+		fpo = []
+		for (fp, fpok) in files:
+			if fpok:
+				if fp.endswith('.png'):
+					fpo.append([fp, fpok])
+				if fp.endswith('.pdf'):
+					fpo.append(jbu_pdf_to_png(args, tmp_files, fp))
 			else:
 				fpo.append(['', False])
 		fgo.append(fpo)
@@ -414,6 +433,8 @@ def jbu_handle(cmd, ctx, fgroups):
 		return jbu_to_md(args, ctx['tmp_files'], fgroups)
 	elif cmd.split()[0] == 'pdf':
 		return jbu_to_pdf(args, ctx['tmp_files'], fgroups)
+	elif cmd.split()[0] == 'png':
+		return jbu_to_png(args, ctx['tmp_files'], fgroups)
 	elif cmd.split()[0] == 'with':
 		return jbu_with(args, ctx, fgroups)
 	elif cmd.split()[0] == 'dict':
