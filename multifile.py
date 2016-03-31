@@ -1,6 +1,7 @@
 import os,sys,os.path
 
 g_dbg = '-dbg' in sys.argv or False
+g_verbose = '-verbose' in sys.argv or False
 
 k_vt_col_map = { '':'\x1b[0m', 'default':'\x1b[0m', 'black':'\x1b[30m', 'red':'\x1b[31m', 'green':'\x1b[32m', 'yellow':'\x1b[33m',
 	'blue':'\x1b[34m', 'magenta':'\x1b[35m', 'cyan':'\x1b[36m', 'white':'\x1b[37m',
@@ -47,10 +48,11 @@ def main():
 					ofile.close()
 				ofp = line[len('--['):-2]
 				ofile = open(os.path.join(ofd, ofp), "w")
-				if g_dbg:
+				if g_dbg or g_verbose:
 					set_vt_col('green'); print ' {}'.format(ofp); set_vt_col('default');
 			else:
-				ofile.write(line)
+				if line.startswith('--#') == False:
+					ofile.write(line)
 	if ofile:
 		ofile.close()
 largv = sys.argv
