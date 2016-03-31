@@ -2,7 +2,7 @@ import os,sys,os.path,subprocess,hashlib
 
 g_dbg = '-dbg' in sys.argv or False
 g_verbose = '-verbose' in sys.argv or False
-g_force = '-force' in sys.argv or False
+g_no_cache = '-no_cache' in sys.argv or False
 
 k_vt_col_map = { '':'\x1b[0m', 'default':'\x1b[0m', 'black':'\x1b[30m', 'red':'\x1b[31m', 'green':'\x1b[32m', 'yellow':'\x1b[33m',
 	'blue':'\x1b[34m', 'magenta':'\x1b[35m', 'cyan':'\x1b[36m', 'white':'\x1b[37m',
@@ -66,7 +66,7 @@ def main():
 						handle_file(ofp, old_md5)
 				do_handle = line.startswith('-=[')
 				ofn = line[len('--['):-2]; ofp = os.path.join(ofd, ofn);
-				if do_handle and not g_force:
+				if do_handle and not g_no_cache:
 					old_md5 = hashlib.md5(open(ofp, 'r').read()).hexdigest()
 				ofile = open(ofp, "w")
 				find = find+1
