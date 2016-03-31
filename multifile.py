@@ -1,7 +1,8 @@
-import os,sys,os.path,subprocess
+import os,sys,os.path,subprocess,hashlib
 
 g_dbg = '-dbg' in sys.argv or False
 g_verbose = '-verbose' in sys.argv or False
+g_force = '-force' in sys.argv or False
 
 k_vt_col_map = { '':'\x1b[0m', 'default':'\x1b[0m', 'black':'\x1b[30m', 'red':'\x1b[31m', 'green':'\x1b[32m', 'yellow':'\x1b[33m',
 	'blue':'\x1b[34m', 'magenta':'\x1b[35m', 'cyan':'\x1b[36m', 'white':'\x1b[37m',
@@ -40,24 +41,35 @@ def largv_geti(i, dflt):
 def fphere():
 	return os.path.dirname(os.path.realpath(__file__))
 def main():
+	def handle_file(fp, old_md5):
+		new_md5 = hashlib.md5(open(fp, 'r').read()).hexdigest()
+		if new_md5 != old_md5:
+			handletool = os.path.join(fphere(), 'handle_file.sh')
+			pop_in = [handletool, ofp]
+			#print ''; sys.stdout.flush();
+			pop = subprocess.Popen(pop_in)
+			pop.wait()
+			#print ''
+		else:
+			if g_verbose:
+				print '  (cached)'
 	ifp = largv[1]
 	ofd = os.path.dirname(os.path.realpath(ifp))
-	ofp = ''; ofile = None; do_handle = False;
-	handletool = os.path.join(fphere(), 'handle_file.sh')
+	ofp = ''; ofile = None; do_handle = False; old_md5 = None;
+	find = 0
 	with open(ifp, "r") as ifile:
 		for line in ifile.readlines():
 			if (line.startswith('--[') or line.startswith('-=['))  and line.rstrip().endswith(']'):
 				if ofile:
 					ofile.close()
 					if (do_handle):
-						pop_in = [handletool, ofp]
-						#print ''; sys.stdout.flush();
-						pop = subprocess.Popen(pop_in)
-						pop.wait()
-						#print ''
+						handle_file(ofp, old_md5)
 				do_handle = line.startswith('-=[')
 				ofn = line[len('--['):-2]; ofp = os.path.join(ofd, ofn);
+				if do_handle and not g_force:
+					old_md5 = hashlib.md5(open(ofp, 'r').read()).hexdigest()
 				ofile = open(ofp, "w")
+				find = find+1
 				if g_dbg or g_verbose:
 					set_vt_col('yellow'); print ' {}'.format(ofn); set_vt_col('default'); sys.stdout.flush();
 			else:
@@ -65,5 +77,7 @@ def main():
 					ofile.write(line)
 	if ofile:
 		ofile.close()
+		if (do_handle):
+			handle_file(ofp, old_md5)
 largv = sys.argv
 main()
