@@ -41,13 +41,18 @@ def largv_geti(i, dflt):
 	if (i >= len(largv)):
 		return dflt
 	return largv[i]
-def endlvl(lvl):
-	if 'type' not in lvl or lvl['type'] == '':
-		print ''.join(['#']*(lvl['lvl']+1)), lvl['lines'][0]
-	for l in reversed(lvl['lines'][1:]):
-		print l
 def main():
 	k_titles = ['list', 'bullets', 'notes', 'sections', 'copy', 'tex', 'comments', 'table']
+	k_titles2 = ['table']
+	def get_title(ptitle, out):
+		if ptitle in k_titles:
+			out[0] = ptitle; out[1] = ''; return True;
+		elif ptitle.split(' ')[0] in k_titles2:
+				ptitle_splt = ptitle.split()
+				out[0] = ptitle_splt[0]; out[1] = ' '.join(ptitle_splt[1:]);
+				return True
+		out[0] = ''; out[1] = '';
+		return False
 	ifp = largv[1]
 	ofp = os.path.splitext(ifp)[0]+'.tex'
 	lvld = []; file_start = True;
@@ -70,12 +75,13 @@ def main():
 			clvld[-1]['lines'].append( [lvl[1], lvl[2]] )
 		else:
 			ptitle = clvld[-1]['lines'][-1][0] if (len(clvld) and len(clvld[-1]['lines'])) else ''
-			ctdi = -1
-			if ptitle in k_titles:
-				title = ptitle
+			ctdi = -1; title_info = ['', '']; title = '';
+			if get_title(ptitle, title_info):
+				title = title_info[0]
 				clvld[-1]['lines'].pop()
 			else:
-				title = ptitle if ptitle in k_titles else ''
+				get_title(ptitle, title_info)
+				title = title_info[0]
 				ctdi = len(clvld)-1
 				while ctdi > 0 and clvld[ctdi]['lvl'] > lvl[0]:
 					ctdi = ctdi-1
@@ -84,7 +90,7 @@ def main():
 					#print '>>>', ctdi, title, clvld[ctdi]
 				else:
 					ctdi = -1
-			clvld.append({'lvl':lvl[0], 'lines':[ [lvl[1], lvl[2]] ], 'title':title, 'ctd_from':ctdi, 'ctd_to':-1, 'has_open_line':False, 'counter':0})
+			clvld.append({'lvl':lvl[0], 'lines':[ [lvl[1], lvl[2]] ], 'title':title, 'opts':title_info[1], 'ctd_from':ctdi, 'ctd_to':-1, 'has_open_line':False, 'counter':0})
 			plvl = lvl[0]
 	plvl = -1; lvl_state = {'section':0};
 	close_stack = []
@@ -108,30 +114,35 @@ def main():
 		lvl['has_open_line'] = False
 		lvl['counter'] = lvl['counter'] + 1
 	def do_line(lvl, line, lvl_state):
+		def print_content(str):
+			if str != 'blank':
+				print >>fout, line[0]
 		if lvl['title'] == 'comments':
 			pass
 		elif lvl['title'] == 'table':
-			if lvl['counter'] == 0:
-				print >>fout, line[0]
-			elif line[0] == '-' or line[0] == '--':
-				if lvl['row_cnt'] > 0:
-					print >>fout, '\\\\'
-				if line[0] == '--':
-					print >>fout, '\hline'
+			if line[0] == '-' or line[0] == '--':
 				lvl['row_cnt'] = lvl['row_cnt'] + 1
 				lvl['col_cnt'] = 0
+				print >>fout, '\\\\'
+				if line[0] == '--':
+					print >>fout, '\hline'
 			else:
 				if lvl['col_cnt'] > 0:
 					print >>fout, '& ',
-				print >>fout, line[0]
+				print_content(line[0])
 				lvl['col_cnt'] = lvl['col_cnt'] + 1
 		else:
-			print >>fout, line[0]
+			print_content(line[0])
 	def begin_lvl(lvl, lvl_state):
 		if lvl['ctd_from'] != -1:
 			if clvld[lvl['ctd_from']]['has_open_line']:
 				end_line(lvl, '')
 				clvld[lvl['ctd_from']]['has_open_line'] = False
+				# continue any specific properties
+				noctd_keys = lvl.keys()
+				for k,v in clvld[lvl['ctd_from']].items():
+					if k not in noctd_keys:
+						lvl[k] = v
 			return
 		if lvl['title'] == 'sections':
 			lvl_state['section'] = lvl_state['section']+1
@@ -140,8 +151,9 @@ def main():
 		elif lvl['title'] == 'bullets':
 			print >>fout, '\\begin{itemize}'
 		elif lvl['title'] == 'table':
-			lvl['row_cnt'] = 0
+			lvl['row_cnt'] = 0; lvl['col_cnt'] = 0;
 			print >>fout, '\\begin{tabular}',
+			print >>fout, lvl['opts'],
 		elif lvl['title'] == 'tex':
 			print >>fout, '\\begin{identity}'
 	def end_lvl(lvl, lvl_state):
@@ -159,6 +171,7 @@ def main():
 			print >>fout, '\\end{tabular}'
 		elif lvl['title'] == 'tex':
 			print >>fout, '\\end{identity}'
+	#print '\n\n'.join(['  ,  '.join(['{}:{}'.format(y[0], y[1]) for y in x.items()]) for x in clvld])
 	for lvl in clvld:
 		if lvl['lvl'] < plvl:
 			while len(close_stack) and close_stack[-1]['lvl'] > lvl['lvl']:
