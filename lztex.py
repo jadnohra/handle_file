@@ -42,7 +42,8 @@ def largv_geti(i, dflt):
 		return dflt
 	return largv[i]
 def main():
-	k_titles = ['list', 'bullets', 'notes', 'sections', 'copy', 'tex', 'comments', 'table']
+	k_ignore = 'ignore'
+	k_titles = ['list', 'bullets', 'notes', 'sections', 'copy', 'tex', 'table']
 	k_titles2 = ['table']
 	def get_title(ptitle, out):
 		if ptitle in k_titles:
@@ -58,6 +59,7 @@ def main():
 	lvld = []; file_start = True;
 	li = 0
 	with open(ifp, "r") as ifile:
+		ignore_depth = -1
 		for line in ifile.readlines():
 			li = li + 1
 			if file_start and (line.startswith('#') or line.strip() == ''):
@@ -67,9 +69,14 @@ def main():
 				lvli = 0
 				while lvli < len(line) and line[lvli] == "\t":
 					lvli = lvli+1
-				lvld.append([lvli, line[lvli:].rstrip(), li])
-	clvld = []
-	plvl = -1
+				lvl_content = line[lvli:].rstrip()
+				if ignore_depth == -1 or lvli <= ignore_depth:
+					if lvl_content != k_ignore:
+						ignore_depth = -1
+						lvld.append([lvli, lvl_content, li])
+					else:
+						ignore_depth = lvli
+	clvld = []; plvl = -1;
 	for lvl in lvld:
 		if lvl[0] == plvl:
 			clvld[-1]['lines'].append( [lvl[1], lvl[2]] )
@@ -117,9 +124,7 @@ def main():
 		def print_content(str):
 			if str != 'blank':
 				print >>fout, line[0]
-		if lvl['title'] == 'comments':
-			pass
-		elif lvl['title'] == 'table':
+		if lvl['title'] == 'table':
 			if line[0] == '-' or line[0] == '--':
 				lvl['row_cnt'] = lvl['row_cnt'] + 1
 				lvl['col_cnt'] = 0
