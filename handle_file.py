@@ -246,6 +246,11 @@ def jbu_md_to_pdf(args, tmp_files, fp):
 	mdtool = 'pandoc'
 	exe_command(fp, [' '.join([mdtool, fp, '-o', fpo] + args)])
 	fpo2 = [fpo, jbu_expect_check(efpo)]; tmp_files.append(fpo2); return fpo2;
+def jbu_md_to_tex(args, tmp_files, fp):
+	fpo = jbu_gen_tmpfile(tmp_files, '.tex'); efpo = jbu_expect(fpo);
+	mdtool = 'pandoc'
+	exe_command(fp, [' '.join([mdtool, fp, '-o', fpo] + args)])
+	fpo2 = [fpo, jbu_expect_check(efpo)]; tmp_files.append(fpo2); return fpo2;
 def jbu_lzt_to_md(args, tmp_files, fp):
 	fpo = jbu_gen_tmpfile(tmp_files, '.md'); efpo = jbu_expect(fpo);
 	mdtool = fpjoinhere(['lztex'])
@@ -291,6 +296,8 @@ def jbu_to_tex(args, tmp_files, fgroups):
 			if fpok:
 				if fp.endswith('.tex'):
 					fpo.append([fp, fpok])
+				if fp.endswith('.md'):
+					fpo.append(jbu_md_to_tex(args, tmp_files, fp))
 				if fp.endswith('.jgr'):
 					fpo.append(jbu_jgr_to_tex(args, tmp_files, fp))
 			else:
@@ -591,4 +598,5 @@ def handle_jbu_file(fp,fn,fe):
 	with open(fp, "r") as ifile:
 		lines = ifile.readlines()
 	handle_jbu_lines(base, fvars, lines)
+#print sys.argv
 do_handle(sys.argv[1])
