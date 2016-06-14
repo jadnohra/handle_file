@@ -51,9 +51,12 @@ def main():
 			out[0] = ptitle; out[1] = ''; return True;
 		elif ptitle.split(' ')[0] in k_titles2:
 				ptitle_splt = ptitle.split()
-				out[0] = ptitle_splt[0]; out[1] = ' '.join(ptitle_splt[1:]);
+				out[0] = ptitle_splt[0]; out[1] = ' '.join(ptitle_splt[1:]); out[2] = {};
+				if '%%' in out[1]:
+					params = '%%'.join(out[1].split('%%')[1:])
+					out[2] = json.loads(params)
 				return True
-		out[0] = ''; out[1] = '';
+		out[0] = ''; out[1] = ''; out[2] = {};
 		return False
 	ifp = largv[1]
 	ofp = os.path.splitext(ifp)[0]+'.tex'
@@ -98,12 +101,18 @@ def main():
 		parent = rel_node['parent'] if lvl_diff == 0 else (rel_node if lvl_diff == 1 else None)
 		if parent == None:
 			print_err(); return False;
-		title_info = ['', '']
+		title_info = ['', '', '']
 		get_title(line[1], title_info)
-		line_node = {'parent':parent, 'line': line[2], 'lvl':line[0], 'content':line[1], 'children':[], 'title':title_info[0], 'title_opts':title_info[1], 'lvl_state':{}}
+		line_node = {'parent':parent, 'line': line[2], 'lvl':line[0], 'content':line[1], 'children':[], 'title':title_info[0], 'title_opts':title_info[1], 'title_params':title_info[2], 'lvl_state':{}}
 		if parent['title'] == 'table':
-			if len(parent['children']) and line_node['content'] in ['-', '--']:
-				parent['children'][-1]['table_last_col'] = True
+			is_sep = line_node['content'] in ['-', '--']
+			is_ext_sep =  any([line_node['content'].startswith(x) for x in ['- ', '-- ']])
+			if is_sep or is_ext_sep:
+				line_node['table_row_sep'] = True
+				if is_ext_sep:
+					line_node['title_opts'] = ' '.join(line_node['content'].split(' ')[1:])
+				if len(parent['children']):
+					parent['children'][-1]['table_last_col'] = True
 		parent['children'].append(line_node)
 		if i+1 < len(lvl_lines):
 			if add_lines_recurse(line_node, lvl_lines, i+1) == False:
@@ -112,7 +121,7 @@ def main():
 			if len(line_node['children']):
 				line_node['children'][-1]['table_last_col'] = True
 		return True
-	root_node = {'parent':None, 'line':-1, 'lvl':-1, 'children':[], 'title':'_root', 'title_opts':'', 'lvl_state':{}}
+	root_node = {'parent':None, 'line':-1, 'lvl':-1, 'children':[], 'title':'_root', 'title_opts':'', 'title_params':{}, 'lvl_state':{}}
 	add_lines_recurse(root_node, lvl_lines, 0)
 	#print_node_tree(root_node)
 	fout = sys.stdout
@@ -136,11 +145,11 @@ def main():
 		if lvl['title'] == 'notes':
 			print >>fout, indented_str(node, lvl_state, '\\end{note}')
 		if lvl['title'] == 'table':
-			if line == '-' or line == '--':
+			if node.get('table_row_sep', False):
 				lvl_state['row_cnt'] = lvl_state['row_cnt'] + 1
 				lvl_state['col_cnt'] = 0
-				print >>fout, indented_str(node, lvl_state, '\\\\')
-				if line == '--':
+				print >>fout, indented_str(node, lvl_state, '\\\\ ' + node['title_opts'])
+				if line.startswith('--'):
 					print >>fout, indented_str(node, lvl_state, '\hline')
 			else:
 				if node.get('table_last_col', False) == False:
@@ -151,7 +160,7 @@ def main():
 			if strng != 'blank':
 				print >>fout, indented_str(node, lvl_state, strng)
 		if lvl['title'] == 'table':
-			if node['content'] in ['-', '--']:
+			if node.get('table_row_sep', False):
 				return
 		print_content(node, lvl_state, node['content'])
 	def begin_lvl(lvl, lvl_state, indent_content):
@@ -168,6 +177,15 @@ def main():
 			print >>fout, indented_str(lvl, lvl_state, '$')
 		elif lvl['title'] == 'table':
 			lvl_state['row_cnt'] = 0; lvl_state['col_cnt'] = 0;
+			if any([x in lvl['title_params'] for x in ['col', 'row']]):
+				lvl_state['has_group'] = True
+				print >>fout, indented_str(lvl, lvl_state, '\\begingroup')
+				if 'row' in lvl['title_params']:
+					row_cmd = '\\renewcommand{{\\arraystretch}}{{ {} }}'.format(lvl['title_params']['row'])
+					print >>fout, indented_str(lvl, lvl_state, row_cmd)
+				if 'col' in lvl['title_params']:
+					col_cmd = '\\setlength{{\\tabcolsep}}{{ {} }}'.format(lvl['title_params']['col'])
+					print >>fout, indented_str(lvl, lvl_state, col_cmd)
 			print >>fout, indented_str(lvl, lvl_state, '\\begin{tabular}'),
 			print >>fout, lvl['title_opts']
 		elif lvl['title'] == 'tex':
@@ -187,6 +205,8 @@ def main():
 			print >>fout, indented_str(lvl, lvl_state, '$')
 		elif lvl['title'] == 'table':
 			print >>fout, indented_str(lvl, lvl_state, '\\end{tabular}')
+			if lvl_state.get('has_group', False):
+				print >>fout, indented_str(lvl, lvl_state, '\\endgroup')
 		elif lvl['title'] == 'tex':
 			print >>fout, indented_str(lvl, lvl_state, '\\end{identity}')
 	def process_nodes_recurse(node, indent_content):
