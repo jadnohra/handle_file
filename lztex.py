@@ -1,4 +1,5 @@
 import os,sys
+import copy, json
 
 g_dbg = '-dbg' in sys.argv or False
 
@@ -43,7 +44,7 @@ def largv_geti(i, dflt):
 	return largv[i]
 def main():
 	k_ignore = 'ignore'
-	k_titles = ['list', 'bullets', 'notes', 'sections', 'copy', 'tex', 'table']
+	k_titles = ['list', 'bullets', 'mm', 'm', 'notes', 'sections', 'copy', 'tex', 'table', 'par']
 	k_titles2 = ['table']
 	def get_title(ptitle, out):
 		if ptitle in k_titles:
@@ -56,7 +57,7 @@ def main():
 		return False
 	ifp = largv[1]
 	ofp = os.path.splitext(ifp)[0]+'.tex'
-	lvld = []; file_start = True;
+	lvl_lines = []; file_start = True;
 	li = 0
 	with open(ifp, "r") as ifile:
 		ignore_depth = -1
@@ -73,123 +74,123 @@ def main():
 				if ignore_depth == -1 or lvli <= ignore_depth:
 					if lvl_content != k_ignore:
 						ignore_depth = -1
-						lvld.append([lvli, lvl_content, li])
+						lvl_lines.append([lvli, lvl_content, li])
 					else:
 						ignore_depth = lvli
-	clvld = []; plvl = -1;
-	for lvl in lvld:
-		if lvl[0] == plvl:
-			clvld[-1]['lines'].append( [lvl[1], lvl[2]] )
-		else:
-			ptitle = clvld[-1]['lines'][-1][0] if (len(clvld) and len(clvld[-1]['lines'])) else ''
-			ctdi = -1; title_info = ['', '']; title = '';
-			if get_title(ptitle, title_info):
-				title = title_info[0]
-				clvld[-1]['lines'].pop()
-			else:
-				get_title(ptitle, title_info)
-				title = title_info[0]
-				ctdi = len(clvld)-1
-				while ctdi > 0 and clvld[ctdi]['lvl'] > lvl[0]:
-					ctdi = ctdi-1
-				if ctdi > 0 and clvld[ctdi]['lvl'] == lvl[0]:
-					title = clvld[ctdi]['title']; clvld[ctdi]['ctd_to'] = len(clvld);
-					#print '>>>', ctdi, title, clvld[ctdi]
-				else:
-					ctdi = -1
-			clvld.append({'lvl':lvl[0], 'lines':[ [lvl[1], lvl[2]] ], 'title':title, 'opts':title_info[1], 'ctd_from':ctdi, 'ctd_to':-1, 'has_open_line':False, 'counter':0})
-			plvl = lvl[0]
-	plvl = -1; lvl_state = {'section':0};
-	close_stack = []
+	#print lvl_lines
+	def print_node_tree(node):
+		def rep_parent(node):
+			node['parent'] = node['parent']['line'] if node['parent'] else -1
+			for n in node['children']:
+				rep_parent(n)
+		nnode = copy.deepcopy(node)
+		rep_parent(nnode)
+		print json.dumps(nnode, indent=1)
+	def add_lines_recurse(rel_node, lvl_lines, i):
+		def print_err():
+			set_vt_col('red'); print 'Error: indent at line {}: "{}..."'.format(line[2], line[1][:5])
+		line = lvl_lines[i]
+		lvl_diff = line[0]-rel_node['lvl']
+		while lvl_diff < 0:
+			rel_node = rel_node['parent']; lvl_diff = lvl_diff+1;
+			if rel_node == None:
+				print_err(); return False;
+		parent = rel_node['parent'] if lvl_diff == 0 else (rel_node if lvl_diff == 1 else None)
+		if parent == None:
+			print_err(); return False;
+		title_info = ['', '']
+		get_title(line[1], title_info)
+		line_node = {'parent':parent, 'line': line[2], 'lvl':line[0], 'content':line[1], 'children':[], 'title':title_info[0], 'title_opts':title_info[1], 'lvl_state':{}}
+		if parent['title'] == 'table':
+			if len(parent['children']) and line_node['content'] in ['-', '--']:
+				parent['children'][-1]['table_last_col'] = True
+		parent['children'].append(line_node)
+		if i+1 < len(lvl_lines):
+			if add_lines_recurse(line_node, lvl_lines, i+1) == False:
+				return False
+		if line_node['title'] == 'table':
+			if len(line_node['children']):
+				line_node['children'][-1]['table_last_col'] = True
+		return True
+	root_node = {'parent':None, 'line':-1, 'lvl':-1, 'children':[], 'title':'_root', 'title_opts':'', 'lvl_state':{}}
+	add_lines_recurse(root_node, lvl_lines, 0)
+	#print_node_tree(root_node)
 	fout = sys.stdout
 	if largv_has(['-o']):
 		fout = open(largv_get(['-o'], ''), 'w+')
-	def begin_line(lvl, line, lvl_state):
-		global slvl
-		if lvl['has_open_line']:
-			end_line(lvl, '')
+	def begin_line(lvl, node, lvl_state):
+		line = node['content']
 		if lvl['title'] == 'sections':
-			print >>fout, '\n', ''.join(['#']*(lvl_state['section'])),
+			print >>fout, '\n', ''.join(['#']*(lvl_state.get('section', 0))),
 		elif lvl['title'] == 'notes':
 			print >>fout, '\\begin{note}'
 		elif lvl['title'] == 'list' or lvl['title'] == 'bullets':
 			print >>fout, '\\item',
-		lvl['has_open_line'] = True
-	def end_line(lvl, line):
+	def end_line(lvl, node, lvl_state):
+		line = node['content']
 		if lvl['title'] == 'notes':
 			print >>fout, '\\end{note}'
-		lvl['has_open_line'] = False
-		lvl['counter'] = lvl['counter'] + 1
-	def do_line(lvl, line, lvl_state):
-		def print_content(str):
-			if str != 'blank':
-				print >>fout, line[0]
 		if lvl['title'] == 'table':
-			if line[0] == '-' or line[0] == '--':
-				lvl['row_cnt'] = lvl['row_cnt'] + 1
-				lvl['col_cnt'] = 0
+			if line == '-' or line == '--':
+				lvl_state['row_cnt'] = lvl_state['row_cnt'] + 1
+				lvl_state['col_cnt'] = 0
 				print >>fout, '\\\\'
-				if line[0] == '--':
+				if line == '--':
 					print >>fout, '\hline'
 			else:
-				if lvl['col_cnt'] > 0:
+				if node.get('table_last_col', False) == False:
 					print >>fout, '& ',
-				print_content(line[0])
-				lvl['col_cnt'] = lvl['col_cnt'] + 1
-		else:
-			print_content(line[0])
+				lvl_state['col_cnt'] = lvl_state['col_cnt'] + 1
+	def do_line(lvl, node, lvl_state):
+		def print_content(str):
+			if str != 'blank':
+				print >>fout, str
+		line = node['content']
+		print_content(line)
 	def begin_lvl(lvl, lvl_state):
-		if lvl['ctd_from'] != -1:
-			if clvld[lvl['ctd_from']]['has_open_line']:
-				end_line(lvl, '')
-				clvld[lvl['ctd_from']]['has_open_line'] = False
-				# continue any specific properties
-				noctd_keys = lvl.keys()
-				for k,v in clvld[lvl['ctd_from']].items():
-					if k not in noctd_keys:
-						lvl[k] = v
-			return
 		if lvl['title'] == 'sections':
-			lvl_state['section'] = lvl_state['section']+1
+			lvl_state['section'] = lvl_state.get('section', 0)+1
 		elif lvl['title'] == 'list':
 			print >>fout, '\\begin{enumerate}'
 		elif lvl['title'] == 'bullets':
 			print >>fout, '\\begin{itemize}'
+		elif lvl['title'] == 'mm':
+			print >>fout, '$$'
+		elif lvl['title'] == 'm':
+			print >>fout, '$'
 		elif lvl['title'] == 'table':
-			lvl['row_cnt'] = 0; lvl['col_cnt'] = 0;
+			lvl_state['row_cnt'] = 0; lvl_state['col_cnt'] = 0;
 			print >>fout, '\\begin{tabular}',
-			print >>fout, lvl['opts'],
+			print >>fout, lvl['title_opts'],
 		elif lvl['title'] == 'tex':
 			print >>fout, '\\begin{identity}'
+		elif lvl['title'] == 'par':
+			print >>fout, '\\par'
 	def end_lvl(lvl, lvl_state):
-		if lvl['ctd_to'] != -1:
-			return
-		if lvl['has_open_line']:
-			end_line(lvl, '')
 		if lvl['title'] == 'sections':
-			lvl_state['section'] = lvl_state['section']-1
+			lvl_state['section'] = lvl_state.get('section', 0)-1
 		elif lvl['title'] == 'list':
 			print >>fout, '\\end{enumerate}'
 		elif lvl['title'] == 'bullets':
 			print >>fout, '\\end{itemize}'
+		elif lvl['title'] == 'mm':
+			print >>fout, '$$'
+		elif lvl['title'] == 'm':
+			print >>fout, '$'
 		elif lvl['title'] == 'table':
 			print >>fout, '\\end{tabular}'
 		elif lvl['title'] == 'tex':
 			print >>fout, '\\end{identity}'
-	#print '\n\n'.join(['  ,  '.join(['{}:{}'.format(y[0], y[1]) for y in x.items()]) for x in clvld])
-	for lvl in clvld:
-		if lvl['lvl'] < plvl:
-			while len(close_stack) and close_stack[-1]['lvl'] > lvl['lvl']:
-				end_lvl(close_stack.pop(), lvl_state)
-		begin_lvl(lvl, lvl_state)
-		for line in lvl['lines']:
-			begin_line(lvl, line, lvl_state)
-			if g_dbg:
-				print ''.join(['-']*(lvl['lvl'])),
-			do_line(lvl, line, lvl_state)
-		close_stack.append(lvl); plvl = lvl['lvl'];
-	for lvl in reversed(close_stack):
-		end_lvl(lvl, lvl_state)
+	def process_nodes_recurse(node):
+		begin_lvl(node, node['lvl_state'])
+		for cn in node['children']:
+			begin_line(node, cn, node['lvl_state'])
+			if cn['title'] == '':
+				do_line(node, cn, node['lvl_state'])
+			process_nodes_recurse(cn)
+			end_line(node, cn, node['lvl_state'])
+		end_lvl(node, node['lvl_state'])
+	process_nodes_recurse(root_node)
 
 largv = sys.argv
 main()
