@@ -118,79 +118,88 @@ def main():
 	fout = sys.stdout
 	if largv_has(['-o']):
 		fout = open(largv_get(['-o'], ''), 'w+')
+	def indented_str(node, lvl_state, strng):
+		if lvl_state['indent_content']:
+			return ''.join(['\t']*node['lvl']) + strng
+		else:
+			return strng
 	def begin_line(lvl, node, lvl_state):
 		line = node['content']
 		if lvl['title'] == 'sections':
 			print >>fout, '\n', ''.join(['#']*(lvl_state.get('section', 0))),
 		elif lvl['title'] == 'notes':
-			print >>fout, '\\begin{note}'
+			print >>fout, indented_str(node, lvl_state, '\\begin{note}')
 		elif lvl['title'] == 'list' or lvl['title'] == 'bullets':
-			print >>fout, '\\item',
+			print >>fout, indented_str(node, lvl_state, '\\item'),
 	def end_line(lvl, node, lvl_state):
 		line = node['content']
 		if lvl['title'] == 'notes':
-			print >>fout, '\\end{note}'
+			print >>fout, indented_str(node, lvl_state, '\\end{note}')
 		if lvl['title'] == 'table':
 			if line == '-' or line == '--':
 				lvl_state['row_cnt'] = lvl_state['row_cnt'] + 1
 				lvl_state['col_cnt'] = 0
-				print >>fout, '\\\\'
+				print >>fout, indented_str(node, lvl_state, '\\\\')
 				if line == '--':
-					print >>fout, '\hline'
+					print >>fout, indented_str(node, lvl_state, '\hline')
 			else:
 				if node.get('table_last_col', False) == False:
-					print >>fout, '& ',
+					print >>fout, indented_str(node, lvl_state, '& '),
 				lvl_state['col_cnt'] = lvl_state['col_cnt'] + 1
 	def do_line(lvl, node, lvl_state):
-		def print_content(str):
-			if str != 'blank':
-				print >>fout, str
-		line = node['content']
-		print_content(line)
-	def begin_lvl(lvl, lvl_state):
+		def print_content(node, lvl_state, strng):
+			if strng != 'blank':
+				print >>fout, indented_str(node, lvl_state, strng)
+		if lvl['title'] == 'table':
+			if node['content'] in ['-', '--']:
+				return
+		print_content(node, lvl_state, node['content'])
+	def begin_lvl(lvl, lvl_state, indent_content):
+		lvl_state['indent_content'] = (indent_content and lvl['title'] != 'copy')
 		if lvl['title'] == 'sections':
 			lvl_state['section'] = lvl_state.get('section', 0)+1
 		elif lvl['title'] == 'list':
-			print >>fout, '\\begin{enumerate}'
+			print >>fout, indented_str(lvl, lvl_state, '\\begin{enumerate}')
 		elif lvl['title'] == 'bullets':
-			print >>fout, '\\begin{itemize}'
+			print >>fout, indented_str(lvl, lvl_state, '\\begin{itemize}')
 		elif lvl['title'] == 'mm':
-			print >>fout, '$$'
+			print >>fout, indented_str(lvl, lvl_state, '$$')
 		elif lvl['title'] == 'm':
-			print >>fout, '$'
+			print >>fout, indented_str(lvl, lvl_state, '$')
 		elif lvl['title'] == 'table':
 			lvl_state['row_cnt'] = 0; lvl_state['col_cnt'] = 0;
-			print >>fout, '\\begin{tabular}',
-			print >>fout, lvl['title_opts'],
+			print >>fout, indented_str(lvl, lvl_state, '\\begin{tabular}'),
+			print >>fout, lvl['title_opts']
 		elif lvl['title'] == 'tex':
-			print >>fout, '\\begin{identity}'
+			print >>fout, indented_str(lvl, lvl_state, '\\begin{identity}')
 		elif lvl['title'] == 'par':
-			print >>fout, '\\par'
+			print >>fout, indented_str(lvl, lvl_state, '\\par')
 	def end_lvl(lvl, lvl_state):
 		if lvl['title'] == 'sections':
 			lvl_state['section'] = lvl_state.get('section', 0)-1
 		elif lvl['title'] == 'list':
-			print >>fout, '\\end{enumerate}'
+			print >>fout, indented_str(lvl, lvl_state, '\\end{enumerate}')
 		elif lvl['title'] == 'bullets':
-			print >>fout, '\\end{itemize}'
+			print >>fout, indented_str(lvl, lvl_state, '\\end{itemize}')
 		elif lvl['title'] == 'mm':
-			print >>fout, '$$'
+			print >>fout, indented_str(lvl, lvl_state, '$$')
 		elif lvl['title'] == 'm':
-			print >>fout, '$'
+			print >>fout, indented_str(lvl, lvl_state, '$')
 		elif lvl['title'] == 'table':
-			print >>fout, '\\end{tabular}'
+			print >>fout, indented_str(lvl, lvl_state, '\\end{tabular}')
 		elif lvl['title'] == 'tex':
-			print >>fout, '\\end{identity}'
-	def process_nodes_recurse(node):
-		begin_lvl(node, node['lvl_state'])
+			print >>fout, indented_str(lvl, lvl_state, '\\end{identity}')
+	def process_nodes_recurse(node, indent_content):
+		lvl_state = node['lvl_state']
+		begin_lvl(node, lvl_state, indent_content)
 		for cn in node['children']:
-			begin_line(node, cn, node['lvl_state'])
+			begin_line(node, cn, lvl_state)
 			if cn['title'] == '':
-				do_line(node, cn, node['lvl_state'])
-			process_nodes_recurse(cn)
-			end_line(node, cn, node['lvl_state'])
-		end_lvl(node, node['lvl_state'])
-	process_nodes_recurse(root_node)
+				do_line(node, cn, lvl_state)
+			process_nodes_recurse(cn, lvl_state['indent_content'])
+			end_line(node, cn, lvl_state)
+		end_lvl(node, lvl_state)
+	process_nodes_recurse(root_node, True)
 
 largv = sys.argv
 main()
