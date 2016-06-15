@@ -148,9 +148,12 @@ def main():
 			if node.get('table_row_sep', False):
 				lvl_state['row_cnt'] = lvl_state['row_cnt'] + 1
 				lvl_state['col_cnt'] = 0
-				print >>fout, indented_str(node, lvl_state, '\\\\ ' + node['title_opts'])
+				sep_tex = ''
 				if line.startswith('--'):
-					print >>fout, indented_str(node, lvl_state, '\hline')
+					sep_tex = lvl['title_params'].get('--', '\\\\ \hline')
+				else:
+					sep_tex = lvl['title_params'].get('-', '\\\\')
+				print >>fout, indented_str(node, lvl_state, '{} {}'.format(sep_tex, node['title_opts']))
 			else:
 				if node.get('table_last_col', False) == False:
 					print >>fout, indented_str(node, lvl_state, '& '),
