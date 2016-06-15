@@ -94,15 +94,21 @@ def main():
 			set_vt_col('red'); print 'Error: indent at line {}: "{}..."'.format(line[2], line[1][:5])
 		line = lvl_lines[i]
 		lvl_diff = line[0]-rel_node['lvl']
-		while lvl_diff < 0:
-			rel_node = rel_node['parent']; lvl_diff = lvl_diff+1;
-			if rel_node == None:
-				print_err(); return False;
-		parent = rel_node['parent'] if lvl_diff == 0 else (rel_node if lvl_diff == 1 else None)
+		if lvl_diff > 0 and rel_node['title'] == 'copy':
+			parent = rel_node
+			title_info = ['', '', '']
+			nrel_node = parent
+		else:
+			while lvl_diff < 0:
+				rel_node = rel_node['parent']; lvl_diff = lvl_diff+1;
+				if rel_node == None:
+					print_err(); return False;
+			parent = rel_node['parent'] if lvl_diff == 0 else (rel_node if lvl_diff == 1 else None)
+			title_info = ['', '', '']
+			get_title(line[1], title_info)
+			nrel_node = None
 		if parent == None:
 			print_err(); return False;
-		title_info = ['', '', '']
-		get_title(line[1], title_info)
 		line_node = {'parent':parent, 'line': line[2], 'lvl':line[0], 'content':line[1], 'children':[], 'title':title_info[0], 'title_opts':title_info[1], 'title_params':title_info[2], 'lvl_state':{}}
 		if parent['title'] == 'table':
 			is_sep = line_node['content'] in ['-', '--']
@@ -115,7 +121,7 @@ def main():
 					parent['children'][-1]['table_last_col'] = True
 		parent['children'].append(line_node)
 		if i+1 < len(lvl_lines):
-			if add_lines_recurse(line_node, lvl_lines, i+1) == False:
+			if add_lines_recurse(nrel_node if nrel_node else line_node, lvl_lines, i+1) == False:
 				return False
 		if line_node['title'] == 'table':
 			if len(line_node['children']):
