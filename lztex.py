@@ -44,8 +44,8 @@ def largv_geti(i, dflt):
 	return largv[i]
 def main():
 	k_ignore = 'ignore'
-	k_titles = ['list', 'bullets', 'mm', 'm', 'notes', 'sections', 'copy', 'tex', 'table', 'par']
-	k_titles2 = ['table']
+	k_titles = ['list', 'bullets', 'mm', 'm', 'notes', 'sections', 'copy', 'tex', 'table', 'par', 'footnote']
+	k_titles2 = ['table', 'bullets', 'list', 'color']
 	def get_title(ptitle, out):
 		if ptitle in k_titles:
 			out[0] = ptitle; out[1] = ''; return True;
@@ -145,7 +145,7 @@ def main():
 		elif lvl['title'] == 'notes':
 			print >>fout, indented_str(node, lvl_state, '\\begin{note}')
 		elif lvl['title'] == 'list' or lvl['title'] == 'bullets':
-			print >>fout, indented_str(node, lvl_state, '\\item'),
+			print >>fout, indented_str(node, lvl_state, '\\item')
 	def end_line(lvl, node, lvl_state):
 		line = node['content']
 		if lvl['title'] == 'notes':
@@ -177,9 +177,9 @@ def main():
 		if lvl['title'] == 'sections':
 			lvl_state['section'] = lvl_state.get('section', 0)+1
 		elif lvl['title'] == 'list':
-			print >>fout, indented_str(lvl, lvl_state, '\\begin{enumerate}')
+			print >>fout, indented_str(lvl, lvl_state, '{} {}'.format('\\begin{enumerate}', lvl.get('title_opts', '')))
 		elif lvl['title'] == 'bullets':
-			print >>fout, indented_str(lvl, lvl_state, '\\begin{itemize}')
+			print >>fout, indented_str(lvl, lvl_state, '{} {}'.format('\\begin{itemize}', lvl.get('title_opts', '')))
 		elif lvl['title'] == 'mm':
 			print >>fout, indented_str(lvl, lvl_state, '$$')
 		elif lvl['title'] == 'm':
@@ -201,6 +201,10 @@ def main():
 			print >>fout, indented_str(lvl, lvl_state, '\\begin{identity}')
 		elif lvl['title'] == 'par':
 			print >>fout, indented_str(lvl, lvl_state, '\\par')
+		elif lvl['title'] == 'footnote':
+			print >>fout, indented_str(lvl, lvl_state, '\\footnote{')
+		elif lvl['title'] == 'color':
+			print >>fout, indented_str(lvl, lvl_state, '\\begingroup \\color{{{}}}'.format(lvl['title_opts']))
 	def end_lvl(lvl, lvl_state):
 		if lvl['title'] == 'sections':
 			lvl_state['section'] = lvl_state.get('section', 0)-1
@@ -218,6 +222,10 @@ def main():
 				print >>fout, indented_str(lvl, lvl_state, '\\endgroup')
 		elif lvl['title'] == 'tex':
 			print >>fout, indented_str(lvl, lvl_state, '\\end{identity}')
+		elif lvl['title'] == 'footnote':
+			print >>fout, indented_str(lvl, lvl_state, '}')
+		elif lvl['title'] == 'color':
+				print >>fout, indented_str(lvl, lvl_state, '\\endgroup')
 	def process_nodes_recurse(node, indent_content):
 		lvl_state = node['lvl_state']
 		begin_lvl(node, lvl_state, indent_content)
