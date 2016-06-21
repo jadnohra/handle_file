@@ -44,7 +44,7 @@ def largv_geti(i, dflt):
 	return largv[i]
 def main():
 	k_ignore = 'ignore'
-	k_titles = ['list', 'bullets', 'mm', 'm', 'notes', 'sections', 'copy', 'tex', 'table', 'par', 'footnote']
+	k_titles = ['list', 'bullets', 'cases', 'mm', 'm', 'notes', 'sections', 'copy', 'tex', 'table', 'par', 'footnote']
 	k_titles2 = ['table', 'bullets', 'list', 'color']
 	def get_title(ptitle, out):
 		if ptitle in k_titles:
@@ -118,14 +118,16 @@ def main():
 				if is_ext_sep:
 					line_node['title_opts'] = ' '.join(line_node['content'].split(' ')[1:])
 				if len(parent['children']):
-					parent['children'][-1]['table_last_col'] = True
+					parent['children'][-1]['table_last_row'] = True
 		parent['children'].append(line_node)
 		if i+1 < len(lvl_lines):
 			if add_lines_recurse(nrel_node if nrel_node else line_node, lvl_lines, i+1) == False:
 				return False
 		if line_node['title'] == 'table':
 			if len(line_node['children']):
-				line_node['children'][-1]['table_last_col'] = True
+				line_node['children'][-1]['table_last_row'] = True
+		if parent['title'] == 'cases':
+			parent['children'][-1]['case_last_row'] = True
 		return True
 	root_node = {'parent':None, 'line':-1, 'lvl':-1, 'children':[], 'title':'_root', 'title_opts':'', 'title_params':{}, 'lvl_state':{}}
 	add_lines_recurse(root_node, lvl_lines, 0)
@@ -161,9 +163,12 @@ def main():
 					sep_tex = lvl['title_params'].get('-', '\\\\')
 				print >>fout, indented_str(node, lvl_state, '{} {}'.format(sep_tex, node['title_opts']))
 			else:
-				if node.get('table_last_col', False) == False:
+				if node.get('table_last_row', False) == False:
 					print >>fout, indented_str(node, lvl_state, '& '),
 				lvl_state['col_cnt'] = lvl_state['col_cnt'] + 1
+		if lvl['title'] == 'cases':
+			if node.get('cases_last_row', False):
+					print >>fout, indented_str(node, lvl_state, '\\\\ '),
 	def do_line(lvl, node, lvl_state):
 		def print_content(node, lvl_state, strng):
 			if strng != 'blank':
@@ -180,6 +185,8 @@ def main():
 			print >>fout, indented_str(lvl, lvl_state, '{} {}'.format('\\begin{enumerate}', lvl.get('title_opts', '')))
 		elif lvl['title'] == 'bullets':
 			print >>fout, indented_str(lvl, lvl_state, '{} {}'.format('\\begin{itemize}', lvl.get('title_opts', '')))
+		elif lvl['title'] == 'cases':
+			print >>fout, indented_str(lvl, lvl_state, '{} {}'.format('\\begin{cases}', lvl.get('title_opts', '')))
 		elif lvl['title'] == 'mm':
 			print >>fout, indented_str(lvl, lvl_state, '$$')
 		elif lvl['title'] == 'm':
@@ -212,6 +219,8 @@ def main():
 			print >>fout, indented_str(lvl, lvl_state, '\\end{enumerate}')
 		elif lvl['title'] == 'bullets':
 			print >>fout, indented_str(lvl, lvl_state, '\\end{itemize}')
+		elif lvl['title'] == 'cases':
+			print >>fout, indented_str(lvl, lvl_state, '\\end{cases}')
 		elif lvl['title'] == 'mm':
 			print >>fout, indented_str(lvl, lvl_state, '$$')
 		elif lvl['title'] == 'm':
