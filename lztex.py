@@ -1,5 +1,6 @@
 import os,sys
 import copy, json
+import re
 
 g_dbg = '-dbg' in sys.argv or False
 g_force_keep_indent = '-force_keep_indent' in sys.argv
@@ -44,10 +45,32 @@ def largv_geti(i, dflt):
 	if (i >= len(largv)):
 		return dflt
 	return largv[i]
+def tex_escape(text):
+	"""
+		:param text: a plain text message
+		:return: the message escaped to appear correctly in LaTeX
+	"""
+	conv = {
+		'&': r'\&',
+		'%': r'\%',
+		'$': r'\$',
+		'#': r'\#',
+		'_': r'\_',
+		'{': r'\{',
+		'}': r'\}',
+		'~': r'\textasciitilde{}',
+		'^': r'\^{}',
+		'\\': r'\textbackslash{}',
+		'<': r'\textless',
+		'>': r'\textgreater',
+	}
+	regex = re.compile('|'.join(re.escape(unicode(key)) for key in sorted(conv.keys(), key = lambda item: - len(item))))
+	out = regex.sub(lambda match: conv[match.group()], text)
+	return out
 def main():
 	global g_kill_indent
 	k_ignore = 'ignore'
-	k_titles = ['list', 'bullets', 'cases', 'mm', 'm', 'notes', 'sections', 'copy', 'tex', 'table', 'par', 'footnote', 'onecol']
+	k_titles = ['list', 'bullets', 'cases', 'mm', 'm', 'notes', 'sections', 'copy', 'tex', 'table', 'par', 'footnote', 'onecol', 'tex_esc']
 	k_titles2 = ['table', 'bullets', 'list', 'color']
 	def get_title(ptitle, out):
 		if ptitle in k_titles:
@@ -185,6 +208,9 @@ def main():
 		if lvl['title'] == 'table':
 			if node.get('table_row_sep', False):
 				return
+		elif lvl['title'] == 'tex_esc':
+			print_content(node, lvl_state, tex_escape(node['content']))
+			return
 		print_content(node, lvl_state, node['content'])
 	def begin_lvl(lvl, lvl_state, title_node):
 		lvl_state['title_node'] = title_node # TODO, do this during pre-processing, add it to lvl instead of lvl_state
