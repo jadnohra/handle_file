@@ -2,6 +2,8 @@ import os,sys
 import copy, json
 
 g_dbg = '-dbg' in sys.argv or False
+g_force_keep_indent = '-force_keep_indent' in sys.argv
+g_kill_indent = True
 
 try:
 	import mako.template as mako_temp
@@ -43,8 +45,9 @@ def largv_geti(i, dflt):
 		return dflt
 	return largv[i]
 def main():
+	global g_kill_indent
 	k_ignore = 'ignore'
-	k_titles = ['list', 'bullets', 'cases', 'mm', 'm', 'notes', 'sections', 'copy', 'tex', 'table', 'par', 'footnote']
+	k_titles = ['list', 'bullets', 'cases', 'mm', 'm', 'notes', 'sections', 'copy', 'tex', 'table', 'par', 'footnote', 'onecol']
 	k_titles2 = ['table', 'bullets', 'list', 'color']
 	def get_title(ptitle, out):
 		if ptitle in k_titles:
@@ -59,7 +62,6 @@ def main():
 		out[0] = ''; out[1] = ''; out[2] = {};
 		return False
 	ifp = largv[1]
-	ofp = os.path.splitext(ifp)[0]+'.tex'
 	lvl_lines = []; file_start = True;
 	li = 0
 	with open(ifp, "r") as ifile:
@@ -134,12 +136,19 @@ def main():
 	#print_node_tree(root_node)
 	fout = sys.stdout
 	if largv_has(['-o']):
-		fout = open(largv_get(['-o'], ''), 'w+')
+		ofp = largv_get(['-o'], '')
+		if g_force_keep_indent == False and (os.path.splitext(ofp)[1] == '.md'): # Markdown will treat tabbed text as verbatim, we don't want this.
+			g_kill_indent = True
+		fout = open(ofp, 'w+')
 	def indented_str(node, lvl_state, strng):
-		if lvl_state['indent_content']:
-			return ''.join(['\t']*node['lvl']) + strng
+		is_copy_node = (lvl_state['title_node'] is not None) and (lvl_state['title_node']['title'] == 'copy')
+		if is_copy_node == False:
+			if (g_kill_indent):
+				return strng
+			else:
+				return ''.join(['\t']*node['lvl']) + strng
 		else:
-			return strng
+			return ''.join(['\t']*(node['lvl']-1)) + strng
 	def begin_line(lvl, node, lvl_state):
 		line = node['content']
 		if lvl['title'] == 'sections':
@@ -177,8 +186,8 @@ def main():
 			if node.get('table_row_sep', False):
 				return
 		print_content(node, lvl_state, node['content'])
-	def begin_lvl(lvl, lvl_state, indent_content):
-		lvl_state['indent_content'] = (indent_content and lvl['title'] != 'copy')
+	def begin_lvl(lvl, lvl_state, title_node):
+		lvl_state['title_node'] = title_node # TODO, do this during pre-processing, add it to lvl instead of lvl_state
 		if lvl['title'] == 'sections':
 			lvl_state['section'] = lvl_state.get('section', 0)+1
 		elif lvl['title'] == 'list':
@@ -187,6 +196,8 @@ def main():
 			print >>fout, indented_str(lvl, lvl_state, '{} {}'.format('\\begin{itemize}', lvl.get('title_opts', '')))
 		elif lvl['title'] == 'cases':
 			print >>fout, indented_str(lvl, lvl_state, '{} {}'.format('\\begin{cases}', lvl.get('title_opts', '')))
+		elif lvl['title'] == 'onecol':
+			print >>fout, indented_str(lvl, lvl_state, '{} {}'.format('\\begin{strip}', lvl.get('title_opts', '')))
 		elif lvl['title'] == 'mm':
 			print >>fout, indented_str(lvl, lvl_state, '$$')
 		elif lvl['title'] == 'm':
@@ -221,6 +232,8 @@ def main():
 			print >>fout, indented_str(lvl, lvl_state, '\\end{itemize}')
 		elif lvl['title'] == 'cases':
 			print >>fout, indented_str(lvl, lvl_state, '\\end{cases}')
+		elif lvl['title'] == 'onecol':
+			print >>fout, indented_str(lvl, lvl_state, '\\end{strip}')
 		elif lvl['title'] == 'mm':
 			print >>fout, indented_str(lvl, lvl_state, '$$')
 		elif lvl['title'] == 'm':
@@ -235,17 +248,17 @@ def main():
 			print >>fout, indented_str(lvl, lvl_state, '}')
 		elif lvl['title'] == 'color':
 				print >>fout, indented_str(lvl, lvl_state, '\\endgroup')
-	def process_nodes_recurse(node, indent_content):
+	def process_nodes_recurse(node, title_node):
 		lvl_state = node['lvl_state']
-		begin_lvl(node, lvl_state, indent_content)
+		begin_lvl(node, lvl_state, title_node)
 		for cn in node['children']:
 			begin_line(node, cn, lvl_state)
 			if cn['title'] == '':
 				do_line(node, cn, lvl_state)
-			process_nodes_recurse(cn, lvl_state['indent_content'])
+			process_nodes_recurse(cn, title_node if cn['title'] == '' else cn)
 			end_line(node, cn, lvl_state)
 		end_lvl(node, lvl_state)
-	process_nodes_recurse(root_node, True)
+	process_nodes_recurse(root_node, None)
 
 largv = sys.argv
 main()
