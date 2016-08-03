@@ -212,10 +212,11 @@ def main():
 			print_content(node, lvl_state, tex_escape(node['content']))
 			return
 		print_content(node, lvl_state, node['content'])
-	def begin_lvl(lvl, lvl_state, title_node):
+	def begin_lvl(lvl, lvl_state, title_node, glob_state):
 		lvl_state['title_node'] = title_node # TODO, do this during pre-processing, add it to lvl instead of lvl_state
 		if lvl['title'] == 'sections':
-			lvl_state['section'] = lvl_state.get('section', 0)+1
+			glob_state['section'] = glob_state.get('section', 0)+1
+			lvl_state['section'] = glob_state['section']
 		elif lvl['title'] == 'list':
 			print >>fout, indented_str(lvl, lvl_state, '{} {}'.format('\\begin{enumerate}', lvl.get('title_opts', '')))
 		elif lvl['title'] == 'bullets':
@@ -249,9 +250,9 @@ def main():
 			print >>fout, indented_str(lvl, lvl_state, '\\footnote{')
 		elif lvl['title'] == 'color':
 			print >>fout, indented_str(lvl, lvl_state, '\\begingroup \\color{{{}}}'.format(lvl['title_opts']))
-	def end_lvl(lvl, lvl_state):
+	def end_lvl(lvl, lvl_state, glob_state):
 		if lvl['title'] == 'sections':
-			lvl_state['section'] = lvl_state.get('section', 0)-1
+			glob_state['section'] = glob_state.get('section', 0)-1
 		elif lvl['title'] == 'list':
 			print >>fout, indented_str(lvl, lvl_state, '\\end{enumerate}')
 		elif lvl['title'] == 'bullets':
@@ -274,17 +275,18 @@ def main():
 			print >>fout, indented_str(lvl, lvl_state, '}')
 		elif lvl['title'] == 'color':
 				print >>fout, indented_str(lvl, lvl_state, '\\endgroup')
-	def process_nodes_recurse(node, title_node):
+	def process_nodes_recurse(node, title_node, glob_state):
 		lvl_state = node['lvl_state']
-		begin_lvl(node, lvl_state, title_node)
+		begin_lvl(node, lvl_state, title_node, glob_state)
 		for cn in node['children']:
 			begin_line(node, cn, lvl_state)
 			if cn['title'] == '':
 				do_line(node, cn, lvl_state)
-			process_nodes_recurse(cn, title_node if cn['title'] == '' else cn)
+			process_nodes_recurse(cn, title_node if cn['title'] == '' else cn, glob_state)
 			end_line(node, cn, lvl_state)
-		end_lvl(node, lvl_state)
-	process_nodes_recurse(root_node, None)
+		end_lvl(node, lvl_state, glob_state)
+	glob_state = {}
+	process_nodes_recurse(root_node, None, glob_state)
 
 largv = sys.argv
 main()
