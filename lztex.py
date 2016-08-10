@@ -70,7 +70,7 @@ def tex_escape(text):
 def main():
 	global g_kill_indent
 	k_ignore = 'ignore'
-	k_titles = ['list', 'bullets', 'cases', 'mm', 'm', 'notes', 'sections', 'copy', 'tex', 'table', 'par', 'footnote', 'onecol', 'tex_esc']
+	k_titles = ['list', 'bullets', 'cases', 'mm', 'm', 'notes', 'sections', 'copy', 'tex', 'table', 'par', 'footnote', 'foot', 'footurl', 'onecol', 'tex_esc']
 	k_titles2 = ['table', 'bullets', 'list', 'color']
 	def get_title(ptitle, out):
 		if ptitle in k_titles:
@@ -208,7 +208,7 @@ def main():
 		if lvl['title'] == 'table':
 			if node.get('table_row_sep', False):
 				return
-		elif lvl['title'] == 'tex_esc':
+		elif lvl['title'] in ['tex_esc', 'footurl']:
 			print_content(node, lvl_state, tex_escape(node['content']))
 			return
 		print_content(node, lvl_state, node['content'])
@@ -246,8 +246,10 @@ def main():
 			print >>fout, indented_str(lvl, lvl_state, '\\begin{identity}')
 		elif lvl['title'] == 'par':
 			print >>fout, indented_str(lvl, lvl_state, '\\par')
-		elif lvl['title'] == 'footnote':
+		elif lvl['title'] in ['footnote', 'foot']:
 			print >>fout, indented_str(lvl, lvl_state, '\\footnote{')
+		elif lvl['title'] == 'footurl':
+			print >>fout, indented_str(lvl, lvl_state, '\\footnote{\\url{')
 		elif lvl['title'] == 'color':
 			print >>fout, indented_str(lvl, lvl_state, '\\begingroup \\color{{{}}}'.format(lvl['title_opts']))
 	def end_lvl(lvl, lvl_state, glob_state):
@@ -271,8 +273,10 @@ def main():
 				print >>fout, indented_str(lvl, lvl_state, '\\endgroup')
 		elif lvl['title'] == 'tex':
 			print >>fout, indented_str(lvl, lvl_state, '\\end{identity}')
-		elif lvl['title'] == 'footnote':
+		elif lvl['title'] in ['footnote', 'foot']:
 			print >>fout, indented_str(lvl, lvl_state, '}')
+		elif lvl['title'] == 'footurl':
+			print >>fout, indented_str(lvl, lvl_state, '}}')
 		elif lvl['title'] == 'color':
 				print >>fout, indented_str(lvl, lvl_state, '\\endgroup')
 	def process_nodes_recurse(node, title_node, glob_state):
