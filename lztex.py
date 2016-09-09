@@ -70,7 +70,7 @@ def tex_escape(text):
 def main():
 	global g_kill_indent
 	k_ignore = 'ignore'
-	k_titles = ['list', ':list', 'bullets', ':bullets', 'cases', ':cases', 'mm', 'm', 'notes', 'sections', 'copy', 'tex', 'table', 'par', 'footnote', 'foot', 'footurl', 'onecol', 'tex_esc']
+	k_titles = ['list', ':list', 'bullets', ':bullets', 'cases', ':cases', "eqn", 'mm', 'm', 'notes', 'sections', 'copy', 'tex', 'table', 'par', 'footnote', 'foot', 'footurl', 'onecol', 'tex_esc']
 	k_titles2 = ['table', 'bullets', 'list', 'color']
 	def get_title(ptitle, out):
 		if ptitle in k_titles:
@@ -232,6 +232,8 @@ def main():
 			print >>fout, indented_str(lvl, lvl_state, '{} {}'.format('\\begin{cases}', get_title_opt(lvl) ))
 		elif lvl['title'] == 'onecol':
 			print >>fout, indented_str(lvl, lvl_state, '{} {}'.format('\\begin{strip}', lvl.get('title_opts', '')))
+		elif lvl['title'] == 'eqn':
+			print >>fout, indented_str(lvl, lvl_state, '\\begin{equation}')
 		elif lvl['title'] == 'mm':
 			print >>fout, indented_str(lvl, lvl_state, '$$')
 		elif lvl['title'] == 'm':
@@ -270,6 +272,8 @@ def main():
 			print >>fout, indented_str(lvl, lvl_state, '\\end{cases}')
 		elif lvl['title'] == 'onecol':
 			print >>fout, indented_str(lvl, lvl_state, '\\end{strip}')
+		elif lvl['title'] == 'eqn':
+				print >>fout, indented_str(lvl, lvl_state, '\\end{equation}')
 		elif lvl['title'] == 'mm':
 			print >>fout, indented_str(lvl, lvl_state, '$$')
 		elif lvl['title'] == 'm':
