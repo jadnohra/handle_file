@@ -70,7 +70,8 @@ def tex_escape(text):
 def main():
 	global g_kill_indent
 	k_ignore = 'ignore'
-	k_titles = ['keep', 'list', ':list', 'bullets', ':bullets', 'cases', ':cases', "eqn", "eqns*", 'mm', 'm', 'notes', 'sections', 'copy', 'tex', 'table', 'par', 'footnote', 'foot', 'footurl', 'onecol', 'tex_esc']
+	k_titles = ['keep', 'list', ':list', 'bullets', ':bullets', 'cases', ':cases', "eqn", "eqns*", 'mm', 'm', 'notes', 'sections',
+						'copy', 'tex', 'table', 'par', 'footnote', 'foot', 'footurl', 'onecol', 'tex_esc', 'href']
 	k_titles2 = ['table', 'bullets', 'list', 'color']
 	def get_title(ptitle, out):
 		if ptitle in k_titles:
@@ -181,13 +182,15 @@ def main():
 			print >>fout, '\n', ''.join(['#']*(lvl_state.get('section', 0))),
 		elif lvl['title'] == 'notes':
 			print >>fout, indented_str(node, lvl_state, '\\begin{note}')
+		elif lvl['title'] == 'href':
+			print >>fout, indented_str(node, lvl_state, '{'),
 		elif lvl['title'] == 'list' or lvl['title'] == 'bullets':
 			print >>fout, indented_str(node, lvl_state, '\\item')
 	def end_line(lvl, node, lvl_state):
 		line = node['content']
 		if lvl['title'] == 'notes':
 			print >>fout, indented_str(node, lvl_state, '\\end{note}')
-		if lvl['title'] == 'table':
+		elif lvl['title'] == 'table':
 			if node.get('table_row_sep', False):
 				lvl_state['row_cnt'] = lvl_state['row_cnt'] + 1
 				lvl_state['col_cnt'] = 0
@@ -201,9 +204,11 @@ def main():
 				if node.get('table_last_row', False) == False:
 					print >>fout, indented_str(node, lvl_state, '& '),
 				lvl_state['col_cnt'] = lvl_state['col_cnt'] + 1
-		if lvl['title'] == 'cases':
+		elif lvl['title'] == 'cases':
 			if node.get('cases_last_row', False):
 					print >>fout, indented_str(node, lvl_state, '\\\\ '),
+		elif lvl['title'] == 'href':
+			print >>fout, indented_str(node, lvl_state, '}')
 	def do_line(lvl, node, lvl_state, glob_state):
 		def print_content(node, lvl_state, strng):
 			if strng != 'blank':
@@ -264,6 +269,8 @@ def main():
 			print >>fout, indented_str(lvl, lvl_state, '\\footnote{')
 		elif lvl['title'] == 'footurl':
 			print >>fout, indented_str(lvl, lvl_state, '\\footnote{\\url{')
+		elif lvl['title'] == 'href':
+			print >>fout, indented_str(lvl, lvl_state, '\\href')
 		elif lvl['title'] == 'color':
 			print >>fout, indented_str(lvl, lvl_state, '\\begingroup \\color{{{}}}'.format(lvl['title_opts']))
 		elif lvl['title'] == 'keep':
