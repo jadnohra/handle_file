@@ -70,7 +70,7 @@ def tex_escape(text):
 def main():
 	global g_kill_indent
 	k_ignore = 'ignore'
-	k_titles = ['list', ':list', 'bullets', ':bullets', 'cases', ':cases', "eqn", 'mm', 'm', 'notes', 'sections', 'copy', 'tex', 'table', 'par', 'footnote', 'foot', 'footurl', 'onecol', 'tex_esc']
+	k_titles = ['keep', 'list', ':list', 'bullets', ':bullets', 'cases', ':cases', "eqn", "eqns*", 'mm', 'm', 'notes', 'sections', 'copy', 'tex', 'table', 'par', 'footnote', 'foot', 'footurl', 'onecol', 'tex_esc']
 	k_titles2 = ['table', 'bullets', 'list', 'color']
 	def get_title(ptitle, out):
 		if ptitle in k_titles:
@@ -129,6 +129,8 @@ def main():
 				if rel_node == None:
 					print_err(); return False;
 			parent = rel_node['parent'] if lvl_diff == 0 else (rel_node if lvl_diff == 1 else None)
+			if parent != None and parent['title'] == 'keep':
+				parent = parent['parent']
 			title_info = ['', '', '']
 			get_title(line[1], title_info)
 			nrel_node = None
@@ -144,7 +146,8 @@ def main():
 					line_node['title_opts'] = ' '.join(line_node['content'].split(' ')[1:])
 				if len(parent['children']):
 					parent['children'][-1]['table_last_row'] = True
-		parent['children'].append(line_node)
+		if line_node['title'] != 'keep':
+			parent['children'].append(line_node)
 		if i+1 < len(lvl_lines):
 			if add_lines_recurse(nrel_node if nrel_node else line_node, lvl_lines, i+1) == False:
 				return False
@@ -232,6 +235,8 @@ def main():
 			print >>fout, indented_str(lvl, lvl_state, '{} {}'.format('\\begin{cases}', get_title_opt(lvl) ))
 		elif lvl['title'] == 'onecol':
 			print >>fout, indented_str(lvl, lvl_state, '{} {}'.format('\\begin{strip}', lvl.get('title_opts', '')))
+		elif lvl['title'] == 'eqns*':
+			print >>fout, indented_str(lvl, lvl_state, '\\begin{align*}')
 		elif lvl['title'] == 'eqn':
 			print >>fout, indented_str(lvl, lvl_state, '\\begin{equation}')
 		elif lvl['title'] == 'mm':
@@ -261,6 +266,8 @@ def main():
 			print >>fout, indented_str(lvl, lvl_state, '\\footnote{\\url{')
 		elif lvl['title'] == 'color':
 			print >>fout, indented_str(lvl, lvl_state, '\\begingroup \\color{{{}}}'.format(lvl['title_opts']))
+		elif lvl['title'] == 'keep':
+			1
 	def end_lvl(lvl, lvl_state, glob_state):
 		if lvl['title'] == 'sections':
 			glob_state['section'] = glob_state.get('section', 0)-1
@@ -272,6 +279,8 @@ def main():
 			print >>fout, indented_str(lvl, lvl_state, '\\end{cases}')
 		elif lvl['title'] == 'onecol':
 			print >>fout, indented_str(lvl, lvl_state, '\\end{strip}')
+		elif lvl['title'] == 'eqns*':
+			print >>fout, indented_str(lvl, lvl_state, '\\end{align*}')
 		elif lvl['title'] == 'eqn':
 				print >>fout, indented_str(lvl, lvl_state, '\\end{equation}')
 		elif lvl['title'] == 'mm':
@@ -290,6 +299,8 @@ def main():
 			print >>fout, indented_str(lvl, lvl_state, '}}')
 		elif lvl['title'] == 'color':
 				print >>fout, indented_str(lvl, lvl_state, '\\endgroup')
+		elif lvl['title'] == 'keep':
+			1
 	def process_nodes_recurse(node, title_node, glob_state):
 		lvl_state = node['lvl_state']
 		begin_lvl(node, lvl_state, title_node, glob_state)
