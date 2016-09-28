@@ -5,6 +5,7 @@ import re
 g_dbg = '-dbg' in sys.argv or False
 g_force_keep_indent = '-force_keep_indent' in sys.argv
 g_kill_indent = True
+g_enable_lzmath = False if '-no_lzmath' in sys.argv else True
 
 try:
 	import mako.template as mako_temp
@@ -72,7 +73,7 @@ def main():
 	k_ignore = 'ignore'
 	k_titles = ['keep', 'list', ':list', 'bullets', ':bullets', 'cases', ':cases', "eqn", "eqns*", 'mm', 'm', 'notes', 'sections',
 						'copy', 'tex', 'table', 'par', 'footnote', 'foot', 'footurl', 'onecol', 'tex_esc', 'href']
-	k_titles2 = ['table', 'bullets', 'list', 'color']
+	k_titles2 = ['table', 'bullets', 'list', 'color', 'mark']
 	def get_title(ptitle, out):
 		if ptitle in k_titles:
 			out[0] = ptitle; out[1] = ''; return True;
@@ -120,6 +121,7 @@ def main():
 			set_vt_col('red'); print 'Error: indent at line {}: "{}..."'.format(line[2], line[1][:5])
 		line = lvl_lines[i]
 		lvl_diff = line[0]-rel_node['lvl']
+		title_mark = ''
 		if lvl_diff > 0 and rel_node['title'] == 'copy':
 			parent = rel_node
 			title_info = ['', '', '']
@@ -130,14 +132,15 @@ def main():
 				if rel_node == None:
 					print_err(); return False;
 			parent = rel_node['parent'] if lvl_diff == 0 else (rel_node if lvl_diff == 1 else None)
-			if parent != None and parent['title'] == 'keep':
+			if parent != None and parent['title'] in ['keep','mark']:
 				parent = parent['parent']
+				title_mark = parent['title_opts']
 			title_info = ['', '', '']
 			get_title(line[1], title_info)
 			nrel_node = None
 		if parent == None:
 			print_err(); return False;
-		line_node = {'parent':parent, 'line': line[2], 'lvl':line[0], 'content':line[1], 'children':[], 'title':title_info[0], 'title_opts':title_info[1], 'title_params':title_info[2], 'lvl_state':{}}
+		line_node = {'parent':parent, 'line': line[2], 'lvl':line[0], 'content':line[1], 'children':[], 'title':title_info[0], 'title_opts':title_info[1], 'title_params':title_info[2], 'title_mark':title_mark, 'lvl_state':{}}
 		if parent['title'] == 'table':
 			is_sep = line_node['content'] in ['-', '--']
 			is_ext_sep =  any([line_node['content'].startswith(x) for x in ['- ', '-- ']])
@@ -147,7 +150,7 @@ def main():
 					line_node['title_opts'] = ' '.join(line_node['content'].split(' ')[1:])
 				if len(parent['children']):
 					parent['children'][-1]['table_last_row'] = True
-		if line_node['title'] != 'keep':
+		if line_node['title'] not in ['keep', 'mark']:
 			parent['children'].append(line_node)
 		if i+1 < len(lvl_lines):
 			if add_lines_recurse(nrel_node if nrel_node else line_node, lvl_lines, i+1) == False:
@@ -167,6 +170,27 @@ def main():
 		if g_force_keep_indent == False and (os.path.splitext(ofp)[1] == '.md'): # Markdown will treat tabbed text as verbatim, we don't want this.
 			g_kill_indent = True
 		fout = open(ofp, 'w+')
+	def do_lzmath(strng):
+		def do_split(strng, marker, rep):
+			splt = strng.split(marker)
+			strng1 = ''
+			is_open = False
+			for i in range(len(splt)):
+				is_open = (i%2 == 1)
+				if is_open:
+					xfm = splt[i].replace('{', '\\{').replace('}', '\\}')
+					strng1 = strng1 + rep + xfm + rep
+				else:
+					strng1 = strng1 + splt[i]
+			if strng1 != strng:
+				print strng1
+			return strng1
+		if g_enable_lzmath:
+				strng1 = do_split(strng, '\tt', '$$')
+				strng2 = do_split(strng1, '\t', '$')
+				return strng2
+		else:
+			return strng
 	def indented_str(node, lvl_state, strng):
 		is_copy_node = (lvl_state['title_node'] is not None) and (lvl_state['title_node']['title'] == 'copy')
 		if is_copy_node == False:
@@ -208,11 +232,13 @@ def main():
 			if node.get('cases_last_row', False):
 					print >>fout, indented_str(node, lvl_state, '\\\\ '),
 		elif lvl['title'] == 'href':
-			print >>fout, indented_str(node, lvl_state, '}')
+			print >>fout, indented_str(node, lvl_state, '}'),
 	def do_line(lvl, node, lvl_state, glob_state):
-		def print_content(node, lvl_state, strng):
+		def print_content(node, lvl_state, strng, line_ret = True, enable_lzmath = False):
 			if strng != 'blank':
-				print >>fout, indented_str(node, lvl_state, strng)
+				print >>fout, indented_str(node, lvl_state, do_lzmath(strng) if enable_lzmath else strng),
+				if line_ret:
+					print >>fout, ''
 		if lvl['title'].startswith(':'):
 			tag = lvl['title'][1:]
 			glob_state['settings'][tag] = node['content']
@@ -223,7 +249,7 @@ def main():
 			elif lvl['title'] in ['tex_esc', 'footurl']:
 				print_content(node, lvl_state, tex_escape(node['content']))
 				return
-			print_content(node, lvl_state, node['content'])
+			print_content(node, lvl_state, node['content'], lvl['title'] not in ['href'], True)
 	def begin_lvl(lvl, lvl_state, title_node, glob_state):
 		def get_title_opt(lvl):
 			opt = lvl.get('title_opts', '')
@@ -270,9 +296,13 @@ def main():
 		elif lvl['title'] == 'footurl':
 			print >>fout, indented_str(lvl, lvl_state, '\\footnote{\\url{')
 		elif lvl['title'] == 'href':
-			print >>fout, indented_str(lvl, lvl_state, '\\href')
+			print >>fout, indented_str(lvl, lvl_state, '\\href'),
 		elif lvl['title'] == 'color':
-			print >>fout, indented_str(lvl, lvl_state, '\\begingroup \\color{{{}}}'.format(lvl['title_opts']))
+			colors = lvl['title_opts'].split(' ')
+			cmd_fore = '\\color{{{}}}'.format(colors[0])
+			cmd_back = '\\colorbox{{{}}}'.format(colors[1]) if (len(colors) >= 2) else ''
+			cmd_par = '\\parbox{0.9\\textwidth}' if len(cmd_back) else ''
+			print >>fout, indented_str(lvl, lvl_state, '\\begingroup {}{}{{{}'.format(cmd_fore, cmd_back, cmd_par))
 		elif lvl['title'] == 'keep':
 			1
 	def end_lvl(lvl, lvl_state, glob_state):
@@ -305,7 +335,7 @@ def main():
 		elif lvl['title'] == 'footurl':
 			print >>fout, indented_str(lvl, lvl_state, '}}')
 		elif lvl['title'] == 'color':
-				print >>fout, indented_str(lvl, lvl_state, '\\endgroup')
+				print >>fout, indented_str(lvl, lvl_state, '} \\endgroup')
 		elif lvl['title'] == 'keep':
 			1
 	def process_nodes_recurse(node, title_node, glob_state):
