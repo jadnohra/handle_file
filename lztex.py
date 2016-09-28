@@ -171,23 +171,33 @@ def main():
 			g_kill_indent = True
 		fout = open(ofp, 'w+')
 	def do_lzmath(strng):
-		def do_split(strng, marker, rep):
+		def do_split_2(strng, markers, reps):
+			splt = strng.split(markers[0])
+			strng1 = ''
+			is_open = False
+			for i in range(len(splt)):
+				is_open = (i%2 == 1)
+				if is_open:
+					end_splt = splt[i].split(markers[1])
+					strng1 = strng1 + reps[0] + end_splt[0] + reps[1] + (end_splt[1] if len(end_splt) > 1 else '')
+				else:
+					strng1 = strng1 + splt[i]
+			return strng1
+		def do_split_1(strng, marker, reps):
 			splt = strng.split(marker)
 			strng1 = ''
 			is_open = False
 			for i in range(len(splt)):
 				is_open = (i%2 == 1)
 				if is_open:
-					xfm = splt[i].replace('{', '\\{').replace('}', '\\}')
-					strng1 = strng1 + rep + xfm + rep
+					xfm = do_split_2( do_split_2(splt[i], ('{', '}'), ('\\{','\\}')), ('  ', '  '), ('{','}'))
+					strng1 = strng1 + reps[0] + xfm + reps[1]
 				else:
 					strng1 = strng1 + splt[i]
-			if strng1 != strng:
-				print strng1
 			return strng1
 		if g_enable_lzmath:
-				strng1 = do_split(strng, '\tt', '$$')
-				strng2 = do_split(strng1, '\t', '$')
+				strng1 = do_split_1(strng, '\t\t', ('$$', '$$'))
+				strng2 = do_split_1(strng1, '\t', ('$', '$'))
 				return strng2
 		else:
 			return strng
