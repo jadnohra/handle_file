@@ -71,7 +71,7 @@ def tex_escape(text):
 def main():
 	global g_kill_indent
 	k_ignore = 'ignore'
-	k_titles = ['keep', 'list', ':list', 'bullets', ':bullets', 'cases', ':cases', "eqn", "eqns*", 'mm', 'm', 'notes', 'sections',
+	k_titles = ['keep', 'list', ':list', 'llist', ':llist', 'bullets', ':bullets', 'bbullets', ':bbullets', 'cases', ':cases', "eqn", "eqns*", 'mm', 'm', 'notes', 'sections',
 						'copy', 'tex', 'table', 'par', 'footnote', 'foot', 'footurl', 'onecol', 'tex_esc', 'href']
 	k_titles2 = ['table', 'bullets', 'list', 'color', 'mark']
 	def get_title(ptitle, out):
@@ -122,6 +122,7 @@ def main():
 		line = lvl_lines[i]
 		lvl_diff = line[0]-rel_node['lvl']
 		title_mark = ''
+		rec_parent = None
 		if lvl_diff > 0 and rel_node['title'] == 'copy':
 			parent = rel_node
 			title_info = ['', '', '']
@@ -140,7 +141,13 @@ def main():
 			nrel_node = None
 		if parent == None:
 			print_err(); return False;
-		line_node = {'parent':parent, 'line': line[2], 'lvl':line[0], 'content':line[1], 'children':[], 'title':title_info[0], 'title_opts':title_info[1], 'title_params':title_info[2], 'title_mark':title_mark, 'lvl_state':{}}
+		node_title = title_info[0]
+		if node_title == '':
+			if parent['title'] in ['llist', 'bbullets']:
+				rec_parent = parent
+			if parent['rec_parent'] is not None:
+				rec_parent = parent['rec_parent']
+		line_node = {'parent':parent, 'rec_parent':rec_parent, 'line': line[2], 'lvl':line[0], 'content':line[1], 'children':[], 'title':node_title, 'title_opts':title_info[1], 'title_params':title_info[2], 'title_mark':title_mark, 'lvl_state':{}}
 		if parent['title'] == 'table':
 			is_sep = line_node['content'] in ['-', '--']
 			is_ext_sep =  any([line_node['content'].startswith(x) for x in ['- ', '-- ']])
@@ -161,7 +168,7 @@ def main():
 		if parent['title'] == 'cases':
 			parent['children'][-1]['case_last_row'] = True
 		return True
-	root_node = {'parent':None, 'line':-1, 'lvl':-1, 'children':[], 'title':'_root', 'title_opts':'', 'title_params':{}, 'lvl_state':{}}
+	root_node = {'parent':None, 'rec_parent':None, 'line':-1, 'lvl':-1, 'children':[], 'title':'_root', 'title_opts':'', 'title_params':{}, 'lvl_state':{}}
 	add_lines_recurse(root_node, lvl_lines, 0)
 	#print_node_tree(root_node)
 	fout = sys.stdout
@@ -218,7 +225,7 @@ def main():
 			print >>fout, indented_str(node, lvl_state, '\\begin{note}')
 		elif lvl['title'] == 'href':
 			print >>fout, indented_str(node, lvl_state, '{'),
-		elif lvl['title'] == 'list' or lvl['title'] == 'bullets':
+		elif (lvl['title'] in ['list', 'bullets', 'llist', 'bbullets']) or (lvl['rec_parent'] is not None and lvl['rec_parent']['title'] in ['llist', 'bbullets']):
 			print >>fout, indented_str(node, lvl_state, '\\item')
 	def end_line(lvl, node, lvl_state):
 		line = node['content']
@@ -268,9 +275,9 @@ def main():
 		if lvl['title'] == 'sections':
 			glob_state['section'] = glob_state.get('section', 0)+1
 			lvl_state['section'] = glob_state['section']
-		elif lvl['title'] == 'list':
+		elif lvl['title'] in ['list', 'llist']:
 			print >>fout, indented_str(lvl, lvl_state, '{} {}'.format('\\begin{enumerate}', get_title_opt(lvl) ))
-		elif lvl['title'] == 'bullets':
+		elif lvl['title'] in ['bullets', 'bbullets']:
 			print >>fout, indented_str(lvl, lvl_state, '{} {}'.format('\\begin{itemize}', get_title_opt(lvl) ))
 		elif lvl['title'] == 'cases':
 			print >>fout, indented_str(lvl, lvl_state, '{} {}'.format('\\begin{cases}', get_title_opt(lvl) ))
@@ -315,12 +322,18 @@ def main():
 			print >>fout, indented_str(lvl, lvl_state, '\\begingroup {}{}{{{}'.format(cmd_fore, cmd_back, cmd_par))
 		elif lvl['title'] == 'keep':
 			1
+		elif lvl['title'] == '' and len(lvl['children']) > 0:
+			if lvl['rec_parent'] is not None:
+				if lvl['rec_parent']['title'] == 'llist':
+					print >>fout, indented_str(lvl['rec_parent'], lvl_state, '{} {}'.format('\\begin{enumerate}', get_title_opt(lvl['rec_parent']) ))
+				elif lvl['rec_parent']['title'] == 'bbullets':
+					print >>fout, indented_str(lvl['rec_parent'], lvl_state, '{} {}'.format('\\begin{itemize}', get_title_opt(lvl['rec_parent']) ))
 	def end_lvl(lvl, lvl_state, glob_state):
 		if lvl['title'] == 'sections':
 			glob_state['section'] = glob_state.get('section', 0)-1
-		elif lvl['title'] == 'list':
+		elif lvl['title'] in ['list', 'llist']:
 			print >>fout, indented_str(lvl, lvl_state, '\\end{enumerate}')
-		elif lvl['title'] == 'bullets':
+		elif lvl['title'] in ['bullets', 'bbullets']:
 			print >>fout, indented_str(lvl, lvl_state, '\\end{itemize}')
 		elif lvl['title'] == 'cases':
 			print >>fout, indented_str(lvl, lvl_state, '\\end{cases}')
@@ -348,6 +361,12 @@ def main():
 				print >>fout, indented_str(lvl, lvl_state, '} \\endgroup')
 		elif lvl['title'] == 'keep':
 			1
+		elif lvl['title'] == '' and len(lvl['children']) > 0:
+			if lvl['rec_parent'] is not None:
+				if lvl['rec_parent']['title'] == 'llist':
+					print >>fout, indented_str(lvl['rec_parent'], lvl_state, '\\end{enumerate}')
+				elif lvl['rec_parent']['title'] == 'bbullets':
+					print >>fout, indented_str(lvl['rec_parent'], lvl_state, '\\end{itemize}')
 	def process_nodes_recurse(node, title_node, glob_state):
 		lvl_state = node['lvl_state']
 		begin_lvl(node, lvl_state, title_node, glob_state)
