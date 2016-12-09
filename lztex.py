@@ -7,6 +7,11 @@ g_force_keep_indent = '-force_keep_indent' in sys.argv
 g_kill_indent = True
 g_enable_lzmath = False if '-no_lzmath' in sys.argv else True
 
+g_re1 = re.compile(r"(\\)([A-Z])\b")
+g_re1_subst = '\mathbb{\\2}'
+g_re2 = re.compile(r"(])([A-Z])\b")
+g_re2_subst = '\mathcal{\\2}'
+
 try:
 	import mako.template as mako_temp
 except ImportError:
@@ -71,9 +76,9 @@ def tex_escape(text):
 def main():
 	global g_kill_indent
 	k_ignore = 'ignore'
-	k_titles = ['keep', 'list', ':list', 'llist', ':llist', 'bullets', ':bullets', 'bbullets', ':bbullets', 'cases', ':cases', "eqn", "eqns*", 'mm', 'm', 'notes', 'sections',
-						'copy', 'tex', 'table', 'par', 'footnote', 'foot', 'footurl', 'onecol', 'tex_esc', 'href']
-	k_titles2 = ['table', 'bullets', 'list', 'color', 'mark']
+	k_titles = ['keep', 'list', ':list', 'llist', ':llist', 'bullets', ':bullets', 'bbullets', ':bbullets', 'cases', ':cases', "eqn", "eqns" ,"eqns*", 'mm', 'm', 'notes', 'sections',
+						'copy', 'tex', 'table', 'mtable', 'par', 'footnote', 'foot', 'say', 'quote', 'footurl', 'onecol', 'tex_esc', 'href', 'url']
+	k_titles2 = ['table', 'mtable', 'bullets', 'list', 'color', 'mark']
 	def get_title(ptitle, out):
 		if ptitle in k_titles:
 			out[0] = ptitle; out[1] = ''; return True;
@@ -148,7 +153,7 @@ def main():
 			if parent['rec_parent'] is not None:
 				rec_parent = parent['rec_parent']
 		line_node = {'parent':parent, 'rec_parent':rec_parent, 'line': line[2], 'lvl':line[0], 'content':line[1], 'children':[], 'title':node_title, 'title_opts':title_info[1], 'title_params':title_info[2], 'title_mark':title_mark, 'lvl_state':{}}
-		if parent['title'] == 'table':
+		if parent['title'] in ['table', 'mtable']:
 			is_sep = line_node['content'] in ['-', '--']
 			is_ext_sep =  any([line_node['content'].startswith(x) for x in ['- ', '-- ']])
 			if is_sep or is_ext_sep:
@@ -162,7 +167,7 @@ def main():
 		if i+1 < len(lvl_lines):
 			if add_lines_recurse(nrel_node if nrel_node else line_node, lvl_lines, i+1) == False:
 				return False
-		if line_node['title'] == 'table':
+		if line_node['title'] in ['table', 'mtable']:
 			if len(line_node['children']):
 				line_node['children'][-1]['table_last_row'] = True
 		if parent['title'] == 'cases':
@@ -178,6 +183,11 @@ def main():
 			g_kill_indent = True
 		fout = open(ofp, 'w+')
 	def do_lzmath(strng):
+		def do_rep(strng):
+			sub = strng
+			sub = re.sub(g_re1, g_re1_subst, sub)
+			sub = re.sub(g_re2, g_re2_subst, sub)
+			return sub
 		def do_split_2(strng, markers, reps):
 			splt = strng.split(markers[0])
 			strng1 = ''
@@ -186,7 +196,7 @@ def main():
 				is_open = (i%2 == 1)
 				if is_open:
 					end_splt = splt[i].split(markers[1])
-					strng1 = strng1 + reps[0] + end_splt[0] + reps[1] + (end_splt[1] if len(end_splt) > 1 else '')
+					strng1 = strng1 + reps[0] + do_rep(end_splt[0]) + reps[1] + (end_splt[1] if len(end_splt) > 1 else '')
 				else:
 					strng1 = strng1 + splt[i]
 			return strng1
@@ -198,13 +208,13 @@ def main():
 				is_open = (i%2 == 1)
 				if is_open:
 					xfm = do_split_2( do_split_2(splt[i], ('{', '}'), ('\\{','\\}')), ('  ', '  '), ('{','}'))
-					strng1 = strng1 + reps[0] + xfm + reps[1]
+					strng1 = strng1 + reps[0] + do_rep(xfm) + reps[1]
 				else:
 					strng1 = strng1 + splt[i]
 			return strng1
 		if g_enable_lzmath:
-				strng1 = do_split_1(strng, '\t\t', ('$$', '$$'))
-				strng2 = do_split_1(strng1, '\t', ('$', '$'))
+				strng1 = do_split_1(strng, '\t\t', (' $$', '$$ '))
+				strng2 = do_split_1(strng1, '\t', (' $', '$ '))
 				return strng2
 		else:
 			return strng
@@ -227,11 +237,13 @@ def main():
 			print >>fout, indented_str(node, lvl_state, '{'),
 		elif (lvl['title'] in ['list', 'bullets', 'llist', 'bbullets']) or (lvl['rec_parent'] is not None and lvl['rec_parent']['title'] in ['llist', 'bbullets']):
 			print >>fout, indented_str(node, lvl_state, '\\item')
+		#elif lvl['title'] == 'mtable':
+		#	print >>fout, indented_str(node, lvl_state, '$'),
 	def end_line(lvl, node, lvl_state):
 		line = node['content']
 		if lvl['title'] == 'notes':
 			print >>fout, indented_str(node, lvl_state, '\\end{note}')
-		elif lvl['title'] == 'table':
+		elif lvl['title'] in ['table', 'mtable']:
 			if node.get('table_row_sep', False):
 				lvl_state['row_cnt'] = lvl_state['row_cnt'] + 1
 				lvl_state['col_cnt'] = 0
@@ -245,6 +257,8 @@ def main():
 				if node.get('table_last_row', False) == False:
 					print >>fout, indented_str(node, lvl_state, '& '),
 				lvl_state['col_cnt'] = lvl_state['col_cnt'] + 1
+			#if lvl['title'] == 'mtable':
+			#	print >>fout, indented_str(node, lvl_state, '$')
 		elif lvl['title'] == 'cases':
 			if node.get('cases_last_row', False):
 					print >>fout, indented_str(node, lvl_state, '\\\\ '),
@@ -260,10 +274,10 @@ def main():
 			tag = lvl['title'][1:]
 			glob_state['settings'][tag] = node['content']
 		else:
-			if lvl['title'] == 'table':
+			if lvl['title'] in ['table', 'mtable']:
 				if node.get('table_row_sep', False):
 					return
-			elif lvl['title'] in ['tex_esc', 'footurl']:
+			elif lvl['title'] in ['tex_esc', 'footurl', 'say', 'url']:
 				print_content(node, lvl_state, tex_escape(node['content']))
 				return
 			print_content(node, lvl_state, node['content'], lvl['title'] not in ['href'], True)
@@ -285,13 +299,15 @@ def main():
 			print >>fout, indented_str(lvl, lvl_state, '{} {}'.format('\\begin{strip}', lvl.get('title_opts', '')))
 		elif lvl['title'] == 'eqns*':
 			print >>fout, indented_str(lvl, lvl_state, '\\begin{align*}')
+		elif lvl['title'] == 'eqns':
+			print >>fout, indented_str(lvl, lvl_state, '\\begin{align}')
 		elif lvl['title'] == 'eqn':
 			print >>fout, indented_str(lvl, lvl_state, '\\begin{equation}')
 		elif lvl['title'] == 'mm':
 			print >>fout, indented_str(lvl, lvl_state, '$$')
 		elif lvl['title'] == 'm':
 			print >>fout, indented_str(lvl, lvl_state, '$')
-		elif lvl['title'] == 'table':
+		elif lvl['title'] in ['table', 'mtable']:
 			lvl_state['row_cnt'] = 0; lvl_state['col_cnt'] = 0;
 			if any([x in lvl['title_params'] for x in ['col', 'row']]):
 				lvl_state['has_group'] = True
@@ -312,8 +328,14 @@ def main():
 			print >>fout, indented_str(lvl, lvl_state, '\\footnote{')
 		elif lvl['title'] == 'footurl':
 			print >>fout, indented_str(lvl, lvl_state, '\\footnote{\\url{')
+		elif lvl['title'] in ['say']:
+			print >>fout, indented_str(lvl, lvl_state, '\\say{')
+		elif lvl['title'] in ['quote']:
+			print >>fout, indented_str(lvl, lvl_state, '\\begin{quote}')
 		elif lvl['title'] == 'href':
 			print >>fout, indented_str(lvl, lvl_state, '\\href'),
+		elif lvl['title'] == 'url':
+			print >>fout, indented_str(lvl, lvl_state, '\\url{'),
 		elif lvl['title'] == 'color':
 			colors = lvl['title_opts'].split(' ')
 			cmd_fore = '\\color{{{}}}'.format(colors[0])
@@ -341,13 +363,15 @@ def main():
 			print >>fout, indented_str(lvl, lvl_state, '\\end{strip}')
 		elif lvl['title'] == 'eqns*':
 			print >>fout, indented_str(lvl, lvl_state, '\\end{align*}')
+		elif lvl['title'] == 'eqns':
+			print >>fout, indented_str(lvl, lvl_state, '\\end{align}')
 		elif lvl['title'] == 'eqn':
 				print >>fout, indented_str(lvl, lvl_state, '\\end{equation}')
 		elif lvl['title'] == 'mm':
 			print >>fout, indented_str(lvl, lvl_state, '$$')
 		elif lvl['title'] == 'm':
 			print >>fout, indented_str(lvl, lvl_state, '$')
-		elif lvl['title'] == 'table':
+		elif lvl['title'] in ['table', 'mtable']:
 			print >>fout, indented_str(lvl, lvl_state, '\\end{tabular}')
 			if lvl_state.get('has_group', False):
 				print >>fout, indented_str(lvl, lvl_state, '\\endgroup')
@@ -355,8 +379,14 @@ def main():
 			print >>fout, indented_str(lvl, lvl_state, '\\end{identity}')
 		elif lvl['title'] in ['footnote', 'foot']:
 			print >>fout, indented_str(lvl, lvl_state, '}')
+		elif lvl['title'] in ['say']:
+			print >>fout, indented_str(lvl, lvl_state, '}')
+		elif lvl['title'] in ['quote']:
+			print >>fout, indented_str(lvl, lvl_state, '\\end{quote}')
 		elif lvl['title'] == 'footurl':
 			print >>fout, indented_str(lvl, lvl_state, '}}')
+		elif lvl['title'] == 'url':
+			print >>fout, indented_str(lvl, lvl_state, '}')
 		elif lvl['title'] == 'color':
 				print >>fout, indented_str(lvl, lvl_state, '} \\endgroup')
 		elif lvl['title'] == 'keep':
