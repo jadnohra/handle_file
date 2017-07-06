@@ -1,207 +1,56 @@
-import sys, subprocess, os, math, os.path, traceback, time, shutil
-import urllib, urllib2, urlparse
+import os,sys
+import copy, json
 import re
+
+g_dbg = '-dbg' in sys.argv or False
+g_force_keep_indent = '-force_keep_indent' in sys.argv
+g_kill_indent = True
+g_enable_lzmath = False if '-no_lzmath' in sys.argv else True
+
+g_re1 = re.compile(r"(\\)([A-Z])\b")
+g_re1_subst = '\mathbb{\\2}'
+g_re2 = re.compile(r"(])([A-Z])\b")
+g_re2_subst = '\mathcal{\\2}'
+
 try:
-	#import urllib2.urlparse
-	import requests
-	import lxml
-	import lxml.html
-	import lxml.cssselect
+	import mako.template as mako_temp
 except ImportError:
-	lxml = None
-
-gPrintCol = [ 'default', 'black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white', 'bdefault', 'bblack', 'bred', 'bgreen', 'byellow', 'bblue', 'bmagenta', 'bcyan', 'bwhite'  ]
-gPrintColCode = [ "\x1B[0m", "\x1B[30m", "\x1B[31m", "\x1B[32m", "\x1B[33m", "\x1B[34m", "\x1B[35m", "\x1B[36m", "\x1B[37m",
-"\x1B[49m", "\x1B[40m", "\x1B[41m", "\x1B[42m", "\x1B[43m", "\x1B[44m", "\x1B[45m", "\x1B[46m", "\x1B[47m", ]
-gAltCols = [ gPrintCol.index(x) for x in ['default', 'yellow'] ]
-def vt_coli(coli):
-	coli = coli % len(gPrintCol)
-	code = gPrintColCode[coli]
-	sys.stdout.write(code)
-	#sys.stdout.write('\x1B[{}D'.format(len(code)-3))
-def vt_col(col):
-	vt_coli(gPrintCol.index(col))
-
-def fpjoin(aa):
-	ret = os.path.join(aa[0], aa[1])
-	for a in aa[2:]:
-	 	ret = os.path.join(ret,a)
-	return ret
-def fphere():
-	return os.path.dirname(os.path.realpath(__file__))
-def fpjoinhere(aa):
-	return fpjoin([fphere()]+aa)
-def fptemp():
-	return fpjoin([fphere(), 'temp'])
-def cwdtemp():
-	os.chdir(fptemp())
-def mktemp():
-	if os.path.isdir(fptemp()) == False:
-		os.mkdir(fptemp())
-def randfilename(dir, pre, ext):
-	i = 1
-	while True:
-		fname = "{}{}.{}".format(pre, i, ext)
-		if (os.path.isfile(os.path.join(dir, fname)) == False):
-			return fname
-		i=i+1
-def fileSize(num, suffix='b'):
-	for unit in ['','K','M','G','T','P','E','Z']:
-	    if abs(num) < 1024.0:
-	        return "%3.1f %s%s" % (num, unit, suffix)
-	    num /= 1024.0
-	return "%.1f %s%s" % (num, 'Y', suffix)
-def long_substr(data):
-	substr = ''
-	if len(data) > 1 and len(data[0]) > 0:
-		for i in range(len(data[0])):
-			for j in range(len(data[0])-i+1):
-				if j > len(substr) and is_substr(data[0][i:i+j], data):
-					substr = data[0][i:i+j]
-	return substr
-def is_substr(find, data):
-	if len(data) < 1 and len(find) < 1:
-		return False
-	for i in range(len(data)):
-		if find not in data[i]:
-			return False
-	return True
-def hash_str_12(s):
-	return abs(hash(s)) % (10 ** 12)
-def textSearchPdfDjvu(path, phrase):
-	fname_, fext = os.path.splitext(path); fext = fext.lower();
-	if (fext.lower() == '.pdf'):
-		args = ['pdftotext', '\"{}\"'.format(path), '-', '|', 'grep', '\"{}\"'.format(phrase)]
-	elif (fext.lower() == '.djvu'):
-		args = ['djvutxt', '\"{}\"'.format(path), '|', 'grep', '\"{}\"'.format(phrase)]
-	else:
-		return ([],[])
-	#print ' '.join(args)
-	proc = subprocess.Popen(' '.join(args), stdout = subprocess.PIPE, stderr = subprocess.PIPE, shell=True)
-	(out, err) = proc.communicate()
-	elines = []; lines = [];
-	if (len(err)):
-		elines = [' ' + x.strip() for x in err.split('\n') if (len(x.strip()))]
-	lines = [x.strip() for x in out.split('\n') if (len(x.strip()))]
-	return (elines, lines)
-def content_to_pdf(content, pdf):
-	pop_in = ['node', fpjoinhere(['npm', 'arg_to_pdf.js']), '"{}"'.format(content), pdf]
-	#print ' '.join(pop_in)
-	pop = subprocess.Popen(' '.join(pop_in), shell = True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-	out, err = pop.communicate()
-	if err and len(err):
-		print err
-		return False
-	return True
-def url_to_pdf(url, pdf, delay = None):
-	if False:
-		pop_in = ['wkhtmltopdf', '-q', '' if delay is None else '--javascript-delay {}'.format(int(delay*1000)), '"{}"'.format(url), pdf]
-	else:
-		pop_in = ['node', fpjoinhere(['npm', 'url_to_pdf.js']), '"{}"'.format(url), pdf]
-	#print ' '.join(pop_in)
-	pop = subprocess.Popen(' '.join(pop_in), shell = True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-	out, err = pop.communicate()
-	if err and len(err):
-		print err
-		return False
-	return True
-def url_download(url, fp):
-	try:
-		response = urllib2.urlopen(url)
-		file = open(fp, 'w')
-		file.write(response.read())
-		file.close()
-		return True
-	except:
-		print ' Error'
+	mako_temp = None
+	pass
+k_vt_col_map = { '':'\x1b[0m', 'default':'\x1b[0m', 'black':'\x1b[30m', 'red':'\x1b[31m', 'green':'\x1b[32m', 'yellow':'\x1b[33m',
+	'blue':'\x1b[34m', 'magenta':'\x1b[35m', 'cyan':'\x1b[36m', 'white':'\x1b[37m',
+	'bdefault':'\x1b[49m', 'bblack':'\x1b[40m', 'bred':'\x1b[41m', 'bgreen':'\x1b[42m', 'byellow':'\x1b[43m',
+	'bblue':'\x1b[44m', 'bmagenta':'\x1b[45m', 'bcyan':'\x1b[46m', 'bwhite':'\x1b[47m' }
+vt_cm = k_vt_col_map
+def set_vt_col(col):
+	sys.stdout.write(k_vt_col_map[col])
+def unistr(str):
+	if not isinstance(str, unicode):
+		return unicode(str, "utf-8")
+	return str
+largv = []
+def largv_has(keys):
+	for i in range(len(keys)):
+		 if (keys[i] in largv):
+			return True
 	return False
-def process_scrape(arg):
-	if lxml == None:
-			print "You need to install 'lxml' and 'requests' first."
-			return
-	mktemp()
-	temps = []
-	#try to get main page as pdf
-	src_pdf_fp = fpjoinhere(['temp', 'scrape_source.pdf'])
-	print ' Converting {} -> {} ...'.format(arg, src_pdf_fp)
-	if url_to_pdf(arg, src_pdf_fp):
-		temps.append(src_pdf_fp)
-	else:
-		print '  Failed to convert source page'
-	urllib.URLopener.version = 'Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/35.0.1916.153 Safari/537.36 SE 2.X MetaSr 1.0'
-	print ' Reading \n  {} ...'.format(arg), ;sys.stdout.flush();
-	page = requests.get(arg)
-	dom =  lxml.html.fromstring(page.text)
-	selAnchor = lxml.cssselect.CSSSelector('a')
-	foundElements = selAnchor(dom)
-	#print [e.get('href') for e in foundElements if e.get('href') and e.get('href').endswith('.pdf')]
-	foundPdf = [e.get('href') for e in foundElements if e.get('href') and e.get('href').endswith('.pdf')]
-	#print foundPdf
-	print ' [{} files]'.format(len(foundPdf)); sys.stdout.flush();
-	print ' Downloading {} files...'.format(len(foundPdf))
-	for pdf in foundPdf:
-		fn = urllib2.urlparse.urlsplit(pdf).path.split('/')[-1]
-		fp = fpjoinhere(['temp', fn])
-		furl = urlparse.urljoin(arg, pdf).replace('\\', '/')
-		print '  {} -> {} ...'.format(furl,  fp),; sys.stdout.flush();
-		if (os.path.isfile(fp)):
-			print ' (cached)',
-		else:
-			urllib.urlretrieve(furl, fp)
-		temps.append(fp)
-		print '[{}]'.format(fileSize(os.path.getsize(fp)))
-	return temps
-def quote_list(items):
-	return [x if (x.startswith("''") or x.startswith('"')) else '"{}"'.format(x) for x in items]
-def join_files(files):
-	fname_substr = long_substr(files)
-	if len(fname_substr) and (os.path.isdir(fname_substr) == False):
-		out_name = '{}.pdf'.format(fname_substr)
-	else:
-		out_dir = fname_substr if os.path.isdir(fname_substr) else fptemp()
-		out_name = fpjoin([out_dir, randfilename(out_dir, 'join_', 'pdf')])
-	pop_in = [fpjoinhere(['concat_pdf']), '--output', out_name] + quote_list(files)
-	pop = subprocess.Popen(' '.join(pop_in), shell = True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-	out, err = pop.communicate()
-	return out_name
-def move_tabs_to_new_window():
-	scpt = """
-	tell application "Safari"
-	set l to tabs of window 1 where index >= (get index of current tab of window 1)
-	make new document
-	repeat with t in (reverse of l)
-		move t to beginning of tabs of window 1
-	end repeat
-	delete tab -1 of window 1
-	end tell
-	"""
-	args = []
-	p = subprocess.Popen(['osascript', '-'] + args, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-	out,err = p.communicate(scpt)
-	#print (p.returncode, stdout, stderr)
-def get_list_tabs_field(field, right_of_curr = False):
-	scpt_templ = """
-	set all_urls to ""
-	tell application "Safari"
-		set l to tabs of window 1 {}
-		repeat with t in l
-			set url_str to (_FIELD_ of t) as string
-			set all_urls to all_urls & url_str & "\n"
-		end repeat
-	end tell
-	return all_urls
-	""".format('where index >= (get index of current tab of window 1)' if right_of_curr else '')
-	scpt = scpt_templ.replace('_FIELD_', field)
-	args = []
-	p = subprocess.Popen(['osascript', '-'] + args, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-	out,err = p.communicate(scpt)
-	urls = [x for x in out.split('\n') if len(x)]
-	return urls
-def get_list_tabs(fields = ['URL'], right_of_curr = False):
-	ret = []
-	for f in fields:
-		ret.append(get_list_tabs_field(f, right_of_curr))
-	return ret[0] if len(fields) ==  1 else ret
+def largv_has_key(keys):
+	for key in keys:
+		ki = largv.index(key) if key in largv else -1
+		if (ki >= 0 and ki+1 < len(largv)):
+			return True
+	return False
+def largv_get(keys, dflt):
+	if ( hasattr(sys, 'argv')):
+		for key in keys:
+			ki = largv.index(key) if key in largv else -1
+			if (ki >= 0 and ki+1 < len(largv)):
+				return largv[ki+1]
+	return dflt
+def largv_geti(i, dflt):
+	if (i >= len(largv)):
+		return dflt
+	return largv[i]
 def tex_escape(text):
 	"""
 		:param text: a plain text message
@@ -224,220 +73,371 @@ def tex_escape(text):
 	regex = re.compile('|'.join(re.escape(unicode(key)) for key in sorted(conv.keys(), key = lambda item: - len(item))))
 	out = regex.sub(lambda match: conv[match.group()], text)
 	return out
-def ask_yes(question):
-	var = raw_input('{} '.format(question))
-	return var in ['y', 'yes']
-def list_tabs(cmd_text, right_of_curr = False):
-	if 'href' in cmd_text:
-		urls_titles = get_list_tabs(['URL', 'name'], right_of_curr)
-		urls_titles = zip(urls_titles[0], urls_titles[1])
-		print '\n', '\n'.join(['\\href{{ {} }}{{ {} }}'.format(tex_escape(x[0]), tex_escape(x[1])) for x in urls_titles]), '\n'
-	else:
-		use_tex = 'tex' in cmd_text
-		urls = get_list_tabs(['URL'], right_of_curr)
-		print '\n', '\n'.join(['\\url{{ {} }}'.format(tex_escape(x)) if use_tex else x for x in urls]), '\n'
-def join_tabs(right_of_curr = False, interactive = False, TOC_only = False):
-	def url_to_pdf_2(url, pdf):
-		return url_to_pdf(url, pdf, 2)
-	def rem_proto(url):
-		return url[url.index('://')+len('://'):] if '://' in url else url
-	def cached_get_url(url, ext):
-		hsh = str(hash_str_12(url))
-		temp_fp = fpjoin([fptemp(), hsh+ext])
-		cache_fp = fpjoin([fptemp(), hsh+ext+'.cache.txt'])
-		is_cached = False
-		if os.path.isfile(temp_fp):
-			curl = ''
-			if os.path.isfile(cache_fp):
-				with open(cache_fp,'r') as f:
-					curl = f.read()
-			if curl == url:
-				return (True, temp_fp, cache_fp)
+def main():
+	global g_kill_indent
+	k_meta_titles = ['ignore', 'bib']
+	k_titles = ['keep', 'list', ':list', 'llist', ':llist', 'bullets', ':bullets', 'bbullets', ':bbullets', 'cases', ':cases', "eqn", "eqns" ,"eqns*", 'mm', 'm', 'notes', 'sections',
+						'copy', 'tex', 'table', 'mtable', 'par', 'underline', 'footnote', 'foot', 'say', 'quote', 'footurl', 'onecol', 'tex_esc', 'href', 'url', ':colors', 'cite_all']
+	k_titles2 = ['table', 'mtable', 'bullets', 'list', 'color', 'mark']
+	def get_title(ptitle, out):
+		if ptitle in k_titles:
+			out[0] = ptitle; out[1] = ''; return True;
+		elif ptitle.split(' ')[0] in k_titles2:
+				ptitle_splt = ptitle.split()
+				out[0] = ptitle_splt[0]; out[1] = ' '.join(ptitle_splt[1:]); out[2] = {};
+				if '%%' in out[1]:
+					params = '%%'.join(out[1].split('%%')[1:])
+					out[2] = json.loads(params)
+				return True
+		out[0] = ''; out[1] = ''; out[2] = {};
+		return False
+	bib_out_lines = []
+	ifp = largv[1]
+	lvl_lines = []; file_start = True;
+	li = 0
+	with open(ifp, "r") as ifile:
+		ignore_depth = -1; ignore_is_bib = False;
+		for line in ifile.readlines():
+			li = li + 1
+			if file_start and (line.startswith('#') or line.strip() == ''):
+				pass
 			else:
-				#new_fp = fpjoin([fptemp(), randfilename(fptemp(), 'join_tab_', ext[1:])])
-				return (False, temp_fp, cache_fp)
-		return (False, temp_fp, cache_fp)
-	def cache_register(url, cache_fp):
-		with open(cache_fp,'w') as f:
-			f.write(url)
-	def cached_process(show_orig, orig_url, url, ext, get_lambda, temps, descr, col):
-		if show_orig:
-			vt_col('red'); print ' {}'.format(orig_url),;
-		if descr and len(descr):
-			vt_col(col); print ' [{}]'.format(descr),;
-		cached, temp_fp, cache_fp = cached_get_url(url, ext)
-		vt_col('white'); print ' -> [{}]'.format(temp_fp),;
-		if cached:
-			vt_col('magenta'); print ' (cache)';
+				file_start = False
+				lvli = 0
+				while lvli < len(line) and line[lvli] == "\t":
+					lvli = lvli+1
+				lvl_content = line[lvli:].rstrip()
+				if ignore_depth == -1 or lvli <= ignore_depth:
+					if lvl_content not in k_meta_titles:
+						ignore_depth = -1
+						lvl_lines.append([lvli, lvl_content, li])
+					else:
+						ignore_depth = lvli; ignore_is_bib = (lvl_content == 'bib');
+				else:
+						if ignore_is_bib:
+							bib_out_lines.append(lvl_content)
+	bib_cite_ids = []
+	if len(bib_out_lines):
+			bib_ofp = '{}{}'.format(os.path.splitext(ifp)[0], '.bib')
+			bib_fout = open(bib_ofp, 'w+')
+			bib_fout.write('% Auto-generated by lztex from [{}]\n\n'.format(os.path.split(ifp)[1]))
+			bib_fout.write('\n'.join(bib_out_lines))
+			regex = r"(\s|^)@.+{(.+),"
+			for bib_line in bib_out_lines:
+				matches = re.finditer(regex, bib_line)
+				for match in matches:
+					bib_cite_ids.append(match.groups()[1])
+	#print lvl_lines
+	def print_node_tree(node):
+		def rep_parent(node):
+			node['parent'] = node['parent']['line'] if node['parent'] else -1
+			for n in node['children']:
+				rep_parent(n)
+		nnode = copy.deepcopy(node)
+		rep_parent(nnode)
+		print json.dumps(nnode, indent=1)
+	def add_lines_recurse(rel_node, lvl_lines, i):
+		def print_err():
+			set_vt_col('red'); print 'Error: indent at line {}: "{}..."'.format(line[2], line[1][:5])
+		line = lvl_lines[i]
+		lvl_diff = line[0]-rel_node['lvl']
+		title_mark = ''
+		rec_parent = None
+		if lvl_diff > 0 and rel_node['title'] == 'copy':
+			parent = rel_node
+			title_info = ['', '', '']
+			nrel_node = parent
 		else:
-			print '';
-		vt_col('default')
-		if cached:
-			temps.append(temp_fp)
+			while lvl_diff < 0:
+				rel_node = rel_node['parent']; lvl_diff = lvl_diff+1;
+				if rel_node == None:
+					print_err(); return False;
+			parent = rel_node['parent'] if lvl_diff == 0 else (rel_node if lvl_diff == 1 else None)
+			if parent != None and parent['title'] in ['keep','mark']:
+				parent = parent['parent']
+				title_mark = parent['title_opts']
+			title_info = ['', '', '']
+			get_title(line[1], title_info)
+			nrel_node = None
+		if parent == None:
+			print_err(); return False;
+		node_title = title_info[0]
+		if node_title == '':
+			if parent['title'] in ['llist', 'bbullets']:
+				rec_parent = parent
+			if parent['rec_parent'] is not None:
+				rec_parent = parent['rec_parent']
+		line_node = {'parent':parent, 'rec_parent':rec_parent, 'line': line[2], 'lvl':line[0], 'content':line[1], 'children':[], 'title':node_title, 'title_opts':title_info[1], 'title_params':title_info[2], 'title_mark':title_mark, 'lvl_state':{}}
+		if parent['title'] in ['table', 'mtable']:
+			is_sep = line_node['content'] in ['-', '--']
+			is_ext_sep =  any([line_node['content'].startswith(x) for x in ['- ', '-- ']])
+			if is_sep or is_ext_sep:
+				line_node['table_row_sep'] = True
+				if is_ext_sep:
+					line_node['title_opts'] = ' '.join(line_node['content'].split(' ')[1:])
+				if len(parent['children']):
+					parent['children'][-1]['table_last_row'] = True
+		if line_node['title'] not in ['keep', 'mark']:
+			parent['children'].append(line_node)
+		if i+1 < len(lvl_lines):
+			if add_lines_recurse(nrel_node if nrel_node else line_node, lvl_lines, i+1) == False:
+				return False
+		if line_node['title'] in ['table', 'mtable']:
+			if len(line_node['children']):
+				line_node['children'][-1]['table_last_row'] = True
+		if parent['title'] == 'cases':
+			parent['children'][-1]['case_last_row'] = True
+		return True
+	root_node = {'parent':None, 'rec_parent':None, 'line':-1, 'lvl':-1, 'children':[], 'title':'_root', 'title_opts':'', 'title_params':{}, 'lvl_state':{}}
+	add_lines_recurse(root_node, lvl_lines, 0)
+	#print_node_tree(root_node)
+	fout = sys.stdout
+	if largv_has(['-o']):
+		ofp = largv_get(['-o'], '')
+		if g_force_keep_indent == False and (os.path.splitext(ofp)[1] == '.md'): # Markdown will treat tabbed text as verbatim, we don't want this.
+			g_kill_indent = True
+		fout = open(ofp, 'w+')
+	def do_lzmath(strng):
+		def do_rep(strng):
+			sub = strng
+			sub = re.sub(g_re1, g_re1_subst, sub)
+			sub = re.sub(g_re2, g_re2_subst, sub)
+			return sub
+		def do_split_2(strng, markers, reps):
+			splt = strng.split(markers[0])
+			strng1 = ''
+			is_open = False
+			for i in range(len(splt)):
+				is_open = (i%2 == 1)
+				if is_open:
+					end_splt = splt[i].split(markers[1])
+					strng1 = strng1 + reps[0] + do_rep(end_splt[0]) + reps[1] + (end_splt[1] if len(end_splt) > 1 else '')
+				else:
+					strng1 = strng1 + splt[i]
+			return strng1
+		def do_split_1(strng, marker, reps):
+			splt = strng.split(marker)
+			strng1 = ''
+			is_open = False
+			for i in range(len(splt)):
+				is_open = (i%2 == 1)
+				if is_open:
+					xfm = do_split_2( do_split_2(splt[i], ('{', '}'), ('\\{','\\}')), ('  ', '  '), ('{','}'))
+					strng1 = strng1 + reps[0] + do_rep(xfm) + reps[1]
+				else:
+					strng1 = strng1 + splt[i]
+			return strng1
+		if g_enable_lzmath:
+				strng1 = do_split_1(strng, '\t\t', (' $$', '$$ '))
+				strng2 = do_split_1(strng1, '\t', (' $', '$ '))
+				return strng2
 		else:
-			if get_lambda(url, temp_fp):
-				temps.append(temp_fp)
-				cache_register(url, cache_fp)
-	urls = get_list_tabs(right_of_curr)
-	mktemp()
-	temps = []
-	print ''
-	title_content = '<html><body> <center><b>{}</b></center> <ol> {} </ol></body></html>'.format(time.ctime(), ''.join('<li>{}</li>'.format(x) for x in urls))
-	cached_process(True, 'T.O.C', title_content, '.pdf', lambda x,y: content_to_pdf(x, y), temps, None, None)
-	if TOC_only:
-		return
-	urli = 0
-	for url in urls:
-		print ' {}.'.format(urli+1),; urli = urli+1;
-		try:
-			detected = False
-			if not detected:
-				if '.stackexchange.com' in url:
-					url2 = rem_proto(url)
-					dot_splt = url2.split('.')
-					stack_topic = dot_splt[0]
-					sl_splt = url2.split('/')
-					if 'questions' in sl_splt:
-						quest_ind = sl_splt.index('questions')
-						if quest_ind >= 0 and quest_ind+1 < len(sl_splt):
-							stack_number = sl_splt[quest_ind+1]
-							detected = True
-							pdf_url = 'http://www.stackprinter.com/export?question={}&service={}.stackexchange'.format(stack_number, stack_topic)
-							cached_process(False, url, pdf_url, '.pdf', lambda x,y: url_to_pdf_2(x, y), temps, 'stack-exch:{}:{}'.format(stack_topic, stack_number), 'green')
-				if 'mathoverflow.net' in url:
-					url2 = rem_proto(url)
-					sl_splt = url2.split('/')
-					if 'questions' in sl_splt:
-						quest_ind = sl_splt.index('questions')
-						if quest_ind >= 0 and quest_ind+1 < len(sl_splt):
-							stack_number = sl_splt[quest_ind+1]
-							detected = True
-							pdf_url = 'http://www.stackprinter.com/export?question={}&service=mathoverflow'.format(stack_number)
-							cached_process(False, url, pdf_url, '.pdf', lambda x,y: url_to_pdf_2(x,y), temps, 'math-over:{}'.format(stack_number), 'yellow')
-				if url.endswith('.pdf'):
-					detected = True
-					pdf = url.split('/')[-1]; pdf_url = url;
-					cached_process(False, url, pdf_url, '.pdf', lambda x,y: url_download(x, y), temps, 'pdf', 'blue')
-			if not detected:
-				cached_process(True, url, url, '.pdf', lambda x,y: url_to_pdf_2(x,y), temps, 'webpage', 'cyan')
-		except KeyboardInterrupt:
-			vt_col('default')
-			return
-		except:
-			traceback.print_exc()
-	vt_col('default')
-	print ''
-	#print temps
-	if interactive and not ask_yes('Should I join these files?'):
-		return
-	print join_files(temps)
-def process(text_):
-	patts = []
-	def new_patt(name, ext = None):
-		patts.append([name, ext, '{} [{}]'.format(name, ext) if ext else name ]); return name;
-	text = text_.strip()
-	patt1 = new_patt('find files with ')
-	patt2 = new_patt('find files named ')
-	patt3 = new_patt('find duplicates')
-	patt4 = new_patt('join files named ', 'interactive')
-	patt5 = new_patt('show ')
-	patt6 = new_patt('count files')
-	patt7 = new_patt('scrape and join ')
-	patt8 = new_patt('scrape ')
-	patt9 = new_patt('move tabs')
-	patt10 = new_patt('list all tabs', 'tex')
-	patt11 = new_patt('list tabs', 'tex')
-	patt12 = new_patt('join tabs', 'interactive')
-	patt12_1 = new_patt('toc tabs')
-	patt13 = new_patt('clean temp')
-	patt14 = new_patt('git status')
-	patt15 = new_patt('push git', 'message')
-	if text.startswith(patt1):
-		arg = text[len(patt1):]
-		pop_in = ['grep', '-ril', '"{}"'.format(arg), '.']
-		pop = subprocess.Popen(' '.join(pop_in), shell = True, stdout=subprocess.PIPE)
-		out, err = pop.communicate()
-		print out
-	elif text.startswith(patt2):
-		arg = text[len(patt2):]
-		head,tail = os.path.split(arg); head = '.' if len(head) == 0 else head;
-		pop_in = ['find', head, '-maxdepth', '1', '-iname', '"*{}*"'.format(tail)]
-		pop = subprocess.Popen(' '.join(pop_in), shell = True, stdout=subprocess.PIPE)
-		out, err = pop.communicate()
-		print out
-	elif text.startswith(patt3):
-		pop_in = ['fdupes', '.']
-		pop = subprocess.Popen(' '.join(pop_in), shell = True, stdout=subprocess.PIPE)
-		out, err = pop.communicate()
-		print out
-	elif text.startswith(patt4):
-		arg = text[len(patt4):]
-		interactive = False
-		if arg.strip().endswith('interactive'):
-			interactive = True
-			arg = arg[:-1-len('interactive')].strip()
-		head,tail = os.path.split(arg); head = '.' if len(head) == 0 else head;
-		pop_in = ['find', head, '-maxdepth', '1', '-iname', '"*{}*"'.format(tail)]
-		pop = subprocess.Popen(' '.join(pop_in), shell = True, stdout=subprocess.PIPE)
-		out, err = pop.communicate()
-		files = [x for x in sorted(out.split('\n')) if len(x)]
-		if len(files):
-			if interactive:
-				print 'Found:'
-				print '\n'.join([' '+ x for x in files])
-				if not ask_yes('Should I join these files?'):
+			return strng
+	def indented_str(node, lvl_state, strng):
+		is_copy_node = (lvl_state['title_node'] is not None) and (lvl_state['title_node']['title'] == 'copy')
+		if is_copy_node == False:
+			if (g_kill_indent):
+				return strng
+			else:
+				return ''.join(['\t']*node['lvl']) + strng
+		else:
+			return ''.join(['\t']*(node['lvl']-1)) + strng
+	def begin_line(lvl, node, lvl_state):
+		line = node['content']
+		if lvl['title'] == 'sections':
+			print >>fout, '\n', ''.join(['#']*(lvl_state.get('section', 0))),
+		elif lvl['title'] == 'notes':
+			print >>fout, indented_str(node, lvl_state, '\\begin{note}')
+		elif lvl['title'] == 'href':
+			print >>fout, indented_str(node, lvl_state, '{'),
+		elif (lvl['title'] in ['list', 'bullets', 'llist', 'bbullets']) or (lvl['rec_parent'] is not None and lvl['rec_parent']['title'] in ['llist', 'bbullets']):
+			print >>fout, indented_str(node, lvl_state, '\\item')
+		#elif lvl['title'] == 'mtable':
+		#	print >>fout, indented_str(node, lvl_state, '$'),
+	def end_line(lvl, node, lvl_state):
+		line = node['content']
+		if lvl['title'] == 'notes':
+			print >>fout, indented_str(node, lvl_state, '\\end{note}')
+		elif lvl['title'] in ['table', 'mtable']:
+			if node.get('table_row_sep', False):
+				lvl_state['row_cnt'] = lvl_state['row_cnt'] + 1
+				lvl_state['col_cnt'] = 0
+				sep_tex = ''
+				if line.startswith('--'):
+					sep_tex = lvl['title_params'].get('--', '\\\\ \hline')
+				else:
+					sep_tex = lvl['title_params'].get('-', '\\\\')
+				print >>fout, indented_str(node, lvl_state, '{} {}'.format(sep_tex, node['title_opts']))
+			else:
+				if node.get('table_last_row', False) == False:
+					print >>fout, indented_str(node, lvl_state, '& '),
+				lvl_state['col_cnt'] = lvl_state['col_cnt'] + 1
+			#if lvl['title'] == 'mtable':
+			#	print >>fout, indented_str(node, lvl_state, '$')
+		elif lvl['title'] == 'cases':
+			if node.get('cases_last_row', False):
+					print >>fout, indented_str(node, lvl_state, '\\\\ '),
+		elif lvl['title'] == 'href':
+			print >>fout, indented_str(node, lvl_state, '}'),
+	def do_line(lvl, node, lvl_state, glob_state):
+		def print_content(node, lvl_state, strng, line_ret = True, enable_lzmath = False):
+			if strng != 'blank':
+				print >>fout, indented_str(node, lvl_state, do_lzmath(strng) if enable_lzmath else strng),
+				if line_ret:
+					print >>fout, ''
+		if lvl['title'].startswith(':'):
+			tag = lvl['title'][1:]
+			if 'tag' == 'colors':
+				if tag in glob_state['settings']:
+					glob_state['settings'][tag].append(node['content'])
+				else:
+					glob_state['settings'][tag] = [node['content']]
+			else:
+				glob_state['settings'][tag] = node['content']
+		else:
+			if lvl['title'] in ['table', 'mtable']:
+				if node.get('table_row_sep', False):
 					return
-			print join_files(files)
-		else:
-			print 'No files could be matched to [{}]'.format(tail)
-	elif text.startswith(patt5):
-		arg = text[len(patt5):]
-		if arg.endswith('.txt'):
-			pop_in = ['cat', arg]
-			pop = subprocess.Popen(' '.join(pop_in), shell = True)
-			pop.wait()
-			print ''
-		else:
-			pop_in = ['open', '-a', 'Preview.app', arg]
-			subprocess.Popen(' '.join(pop_in), shell = True)
-	elif text.startswith(patt6):
-		pop_in = ['find', '.', '-type', 'f', '-maxdepth', '1']
-		pop = subprocess.Popen(' '.join(pop_in), shell = True, stdout=subprocess.PIPE)
-		out, err = pop.communicate()
-		print len([x for x in out.split('\n') if x.strip() != ''])
-	elif text.startswith(patt7):
-		arg = text[len(patt7):]
-		temps = process_scrape(arg)
-		print ' Joining ...'
-		print '  {}'.format(join_files(temps))
-	elif text.startswith(patt8):
-		arg = text[len(patt8):]
-		process_scrape(arg)
-	elif text.startswith(patt9):
-		move_tabs_to_new_window()
-	elif text.startswith(patt10):
-		list_tabs(text, False)
-	elif text.startswith(patt11):
-		list_tabs(text, True)
-	elif text.startswith(patt12):
-			join_tabs(True, 'interactive' in text)
-	elif text.startswith(patt12_1):
-			join_tabs(True, False, True)
-	elif text.startswith(patt13):
-		shutil.rmtree(fptemp())
-	elif text.startswith(patt14):
-		pop_in = ['git', 'status']
-		pop = subprocess.Popen(' '.join(pop_in), shell = True)
-		pop.communicate()
-	elif text.startswith(patt15):
-		arg = text[len(patt15):].strip()
-		print arg
-		pop_in = ['git', 'add', '*']; pop = subprocess.Popen(' '.join(pop_in), shell = True); pop.communicate();
-		pop_in = ['git', 'commit', '-m', '"{}"'.format('trivial' if len(arg)==0 else arg)]; pop = subprocess.Popen(' '.join(pop_in), shell = True); pop.communicate();
-		pop_in = ['git', 'push', 'origin', 'master']; pop = subprocess.Popen(' '.join(pop_in), shell = True); pop.communicate();
-	else:
-		print "Apologies, I could not understand what you said."
-		print "I understand:"
-		print '\n'.join([' ' + x[2] for x in patts])
+			elif lvl['title'] in ['tex_esc', 'footurl', 'say', 'url']:
+				print_content(node, lvl_state, tex_escape(node['content']))
+				return
+			print_content(node, lvl_state, node['content'], lvl['title'] not in ['href'], True)
+	def begin_lvl(lvl, lvl_state, title_node, glob_state):
+		def get_title_opt(lvl):
+			opt = lvl.get('title_opts', '')
+			return opt if len(opt) else glob_state['settings'].get(lvl['title'],'')
+		lvl_state['title_node'] = title_node # TODO, do this during pre-processing, add it to lvl instead of lvl_state
+		if lvl['title'] == 'sections':
+			glob_state['section'] = glob_state.get('section', 0)+1
+			lvl_state['section'] = glob_state['section']
+		elif lvl['title'] in ['list', 'llist']:
+			print >>fout, indented_str(lvl, lvl_state, '{} {}'.format('\\begin{enumerate}', get_title_opt(lvl) ))
+		elif lvl['title'] in ['bullets', 'bbullets']:
+			print >>fout, indented_str(lvl, lvl_state, '{} {}'.format('\\begin{itemize}', get_title_opt(lvl) ))
+		elif lvl['title'] == 'cases':
+			print >>fout, indented_str(lvl, lvl_state, '{} {}'.format('\\begin{cases}', get_title_opt(lvl) ))
+		elif lvl['title'] == 'onecol':
+			print >>fout, indented_str(lvl, lvl_state, '{} {}'.format('\\begin{strip}', lvl.get('title_opts', '')))
+		elif lvl['title'] == 'eqns*':
+			print >>fout, indented_str(lvl, lvl_state, '\\begin{align*}')
+		elif lvl['title'] == 'eqns':
+			print >>fout, indented_str(lvl, lvl_state, '\\begin{align}')
+		elif lvl['title'] == 'eqn':
+			print >>fout, indented_str(lvl, lvl_state, '\\begin{equation}')
+		elif lvl['title'] == 'mm':
+			print >>fout, indented_str(lvl, lvl_state, '$$')
+		elif lvl['title'] == 'm':
+			print >>fout, indented_str(lvl, lvl_state, '$')
+		elif lvl['title'] in ['table', 'mtable']:
+			lvl_state['row_cnt'] = 0; lvl_state['col_cnt'] = 0;
+			if any([x in lvl['title_params'] for x in ['col', 'row']]):
+				lvl_state['has_group'] = True
+				print >>fout, indented_str(lvl, lvl_state, '\\begingroup')
+				if 'row' in lvl['title_params']:
+					row_cmd = '\\renewcommand{{\\arraystretch}}{{ {} }}'.format(lvl['title_params']['row'])
+					print >>fout, indented_str(lvl, lvl_state, row_cmd)
+				if 'col' in lvl['title_params']:
+					col_cmd = '\\setlength{{\\tabcolsep}}{{ {} }}'.format(lvl['title_params']['col'])
+					print >>fout, indented_str(lvl, lvl_state, col_cmd)
+			print >>fout, indented_str(lvl, lvl_state, '\\begin{tabular}'),
+			print >>fout, lvl['title_opts']
+		elif lvl['title'] == 'tex':
+			print >>fout, indented_str(lvl, lvl_state, '\\begin{identity}')
+		elif lvl['title'] == 'par':
+			print >>fout, indented_str(lvl, lvl_state, '\\par')
+		elif lvl['title'] in ['footnote', 'foot']:
+			print >>fout, indented_str(lvl, lvl_state, '\\footnote{')
+		elif lvl['title'] == 'footurl':
+			print >>fout, indented_str(lvl, lvl_state, '\\footnote{\\url{')
+		elif lvl['title'] in ['say']:
+			print >>fout, indented_str(lvl, lvl_state, '\\say{')
+		elif lvl['title'] in ['underline']:
+			print >>fout, indented_str(lvl, lvl_state, '\\ul{')
+		elif lvl['title'] in ['quote']:
+			print >>fout, indented_str(lvl, lvl_state, '\\begin{quote}')
+		elif lvl['title'] == 'href':
+			print >>fout, indented_str(lvl, lvl_state, '\\href'),
+		elif lvl['title'] == 'url':
+			print >>fout, indented_str(lvl, lvl_state, '\\url{'),
+		elif lvl['title'] == 'color':
+			colors = lvl['title_opts'].split(' ')
+			cmd_fore = ('\\color{{{}}}'  if '{' not in colors[0] else '\\color{}').format(colors[0])
+			cmd_back = '\\colorbox{{{}}}'.format(colors[1] if '{' not in colors[1] else colors[1]) if (len(colors) >= 2) else ''
+			cmd_par = '\\parbox{0.9\\textwidth}' if len(cmd_back) else ''
+			print >>fout, indented_str(lvl, lvl_state, '\\begingroup {}{}{{{}'.format(cmd_fore, cmd_back, cmd_par))
+		elif lvl['title'] == 'keep':
+			1
+		elif lvl['title'] == 'cite_all':
+			if len(bib_cite_ids):
+				cite_list = ', '.join(['@{}'.format(x) for x in bib_cite_ids])
+				print >>fout, '--- \nnocite: |\n {}\n--- \n'.format(cite_list)
+		elif lvl['title'] == '' and len(lvl['children']) > 0:
+			if lvl['rec_parent'] is not None:
+				if lvl['rec_parent']['title'] == 'llist':
+					print >>fout, indented_str(lvl['rec_parent'], lvl_state, '{} {}'.format('\\begin{enumerate}', get_title_opt(lvl['rec_parent']) ))
+				elif lvl['rec_parent']['title'] == 'bbullets':
+					print >>fout, indented_str(lvl['rec_parent'], lvl_state, '{} {}'.format('\\begin{itemize}', get_title_opt(lvl['rec_parent']) ))
+	def end_lvl(lvl, lvl_state, glob_state):
+		if lvl['title'] == 'sections':
+			glob_state['section'] = glob_state.get('section', 0)-1
+		elif lvl['title'] in ['list', 'llist']:
+			print >>fout, indented_str(lvl, lvl_state, '\\end{enumerate}')
+		elif lvl['title'] in ['bullets', 'bbullets']:
+			print >>fout, indented_str(lvl, lvl_state, '\\end{itemize}')
+		elif lvl['title'] == 'cases':
+			print >>fout, indented_str(lvl, lvl_state, '\\end{cases}')
+		elif lvl['title'] == 'onecol':
+			print >>fout, indented_str(lvl, lvl_state, '\\end{strip}')
+		elif lvl['title'] == 'eqns*':
+			print >>fout, indented_str(lvl, lvl_state, '\\end{align*}')
+		elif lvl['title'] == 'eqns':
+			print >>fout, indented_str(lvl, lvl_state, '\\end{align}')
+		elif lvl['title'] == 'eqn':
+				print >>fout, indented_str(lvl, lvl_state, '\\end{equation}')
+		elif lvl['title'] == 'mm':
+			print >>fout, indented_str(lvl, lvl_state, '$$')
+		elif lvl['title'] == 'm':
+			print >>fout, indented_str(lvl, lvl_state, '$')
+		elif lvl['title'] in ['table', 'mtable']:
+			print >>fout, indented_str(lvl, lvl_state, '\\end{tabular}')
+			if lvl_state.get('has_group', False):
+				print >>fout, indented_str(lvl, lvl_state, '\\endgroup')
+		elif lvl['title'] == 'tex':
+			print >>fout, indented_str(lvl, lvl_state, '\\end{identity}')
+		elif lvl['title'] in ['footnote', 'foot']:
+			print >>fout, indented_str(lvl, lvl_state, '}')
+		elif lvl['title'] in ['say']:
+			print >>fout, indented_str(lvl, lvl_state, '}')
+		elif lvl['title'] in ['underline']:
+			print >>fout, indented_str(lvl, lvl_state, '}')
+		elif lvl['title'] in ['quote']:
+			print >>fout, indented_str(lvl, lvl_state, '\\end{quote}')
+		elif lvl['title'] == 'footurl':
+			print >>fout, indented_str(lvl, lvl_state, '}}')
+		elif lvl['title'] == 'url':
+			print >>fout, indented_str(lvl, lvl_state, '}')
+		elif lvl['title'] == 'color':
+				print >>fout, indented_str(lvl, lvl_state, '} \\endgroup')
+		elif lvl['title'] == 'keep':
+			1
+		elif lvl['title'] == '' and len(lvl['children']) > 0:
+			if lvl['rec_parent'] is not None:
+				if lvl['rec_parent']['title'] == 'llist':
+					print >>fout, indented_str(lvl['rec_parent'], lvl_state, '\\end{enumerate}')
+				elif lvl['rec_parent']['title'] == 'bbullets':
+					print >>fout, indented_str(lvl['rec_parent'], lvl_state, '\\end{itemize}')
+	def process_nodes_recurse(node, title_node, glob_state):
+		lvl_state = node['lvl_state']
+		begin_lvl(node, lvl_state, title_node, glob_state)
+		for cn in node['children']:
+			begin_line(node, cn, lvl_state)
+			if cn['title'] == '':
+				do_line(node, cn, lvl_state, glob_state)
+			process_nodes_recurse(cn, title_node if cn['title'] == '' else cn, glob_state)
+			end_line(node, cn, lvl_state)
+		end_lvl(node, lvl_state, glob_state)
+	glob_state = { 'settings':{} }
+	process_nodes_recurse(root_node, None, glob_state)
 
-process(' '.join(sys.argv[1:]))
+largv = sys.argv
+main()
