@@ -102,6 +102,8 @@ def main():
 			if file_start and (line.startswith('#') or line.strip() == ''):
 				pass
 			else:
+				if '\t \t' in line:
+					set_vt_col('yellow'); print 'Warning: space between tabs at line {}: "{}..."'.format(li, line.strip()[:5])
 				file_start = False
 				lvli = 0
 				while lvli < len(line) and line[lvli] == "\t":
@@ -300,6 +302,9 @@ def main():
 					return
 			elif lvl['title'] in ['tex_esc', 'footurl', 'say', 'url']:
 				print_content(node, lvl_state, tex_escape(node['content']))
+				return
+			elif lvl['title'] in ['quote']:
+				print_content(node, lvl_state, node['content'].replace('- ', ''))
 				return
 			print_content(node, lvl_state, node['content'], lvl['title'] not in ['href'], True)
 	def begin_lvl(lvl, lvl_state, title_node, glob_state):
