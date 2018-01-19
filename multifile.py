@@ -86,10 +86,10 @@ def main():
 					g_prefixes[key_val[0]] = key_val[1]
 					if g_verbose:
 						print ' prefix: [{}]:[{}]'.format(key_val[0], key_val[1])
-				else:
-					if line.startswith('--#') == False:
-						if ofile:
-							ofile.write(line)
+				elif line.startswith('-##'):
+					continue
+				elif (line.startswith('--#') == False) and (ofile):
+					ofile.write(line)
 	if ofile:
 		ofile.close()
 		if (do_handle):
