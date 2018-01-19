@@ -3,6 +3,7 @@ import os,sys,os.path,subprocess,hashlib
 g_dbg = '-dbg' in sys.argv or False
 g_verbose = '-verbose' in sys.argv or False
 g_no_cache = '-no_cache' in sys.argv or False
+g_prefixes = {}
 
 k_vt_col_map = { '':'\x1b[0m', 'default':'\x1b[0m', 'black':'\x1b[30m', 'red':'\x1b[31m', 'green':'\x1b[32m', 'yellow':'\x1b[33m',
 	'blue':'\x1b[34m', 'magenta':'\x1b[35m', 'cyan':'\x1b[36m', 'white':'\x1b[37m',
@@ -70,14 +71,25 @@ def main():
 					if os.path.exists(ofp):
 						old_md5 = hashlib.md5(open(ofp, 'r').read()).hexdigest()
 					else:
-						old_md5 = None	
+						old_md5 = None
 				ofile = open(ofp, "w")
+				if os.path.splitext(ofp)[1] in g_prefixes:
+					ofile.write(g_prefixes[os.path.splitext(ofp)[1]])
+					ofile.write('\n')
 				find = find+1
 				if g_dbg or g_verbose:
 					set_vt_col('yellow'); print ' {}'.format(ofn); set_vt_col('default'); sys.stdout.flush();
 			else:
-				if line.startswith('--#') == False:
-					ofile.write(line)
+				if line.startswith('-#-'):
+					key_val = [x.strip() for x in line[len('-#-'):].split(':')]
+					key_val[1] = ':'.join(key_val[1:])
+					g_prefixes[key_val[0]] = key_val[1]
+					if g_verbose:
+						print ' prefix: [{}]:[{}]'.format(key_val[0], key_val[1])
+				else:
+					if line.startswith('--#') == False:
+						if ofile:
+							ofile.write(line)
 	if ofile:
 		ofile.close()
 		if (do_handle):
