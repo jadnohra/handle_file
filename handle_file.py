@@ -220,7 +220,14 @@ def jbu_extract_tex_tool(fp, cmt, def_tool='pdflatex'):
 def jbu_tex_to_pdf(args, tmp_files, fp):
 	fpo = jbu_gen_tmpfile(tmp_files, '.pdf');
 	textool = jbu_extract_tex_tool(fp, ['%'])
-	exec_cmd = [' '.join([textool, fp] + args)]
+	rem_arg_i = []
+	for i,arg in enumerate(args):
+		if arg.startswith('tool:'):
+			textool = arg[len('tool:'):]
+			rem_arg_i.append(i)
+	for arg_i in reversed(rem_arg_i):
+		args.pop(arg_i)
+	exec_cmd = [' '.join([textool] + args + [fp])]
 	fptoolout = repext(fp, '.pdf')
 	efpo = jbu_expect(fptoolout)
 	#print exec_cmd
@@ -231,10 +238,96 @@ def jbu_tex_to_pdf(args, tmp_files, fp):
 		print 'captured log of: [{}]'.format(exec_cmd)
 		print outs[0][0]; print outs[0][1];
 	return fpo2;
+def jbu_dvi_to_pdf(args, tmp_files, fp):
+	fpo = jbu_gen_tmpfile(tmp_files, '.pdf');
+	pdftool = 'dvipdfm'
+	rem_arg_i = []
+	for i,arg in enumerate(args):
+		if arg.startswith('tool:'):
+			pdftool = arg[len('tool:'):]
+			rem_arg_i.append(i)
+	for arg_i in reversed(rem_arg_i):
+		args.pop(arg_i)
+	exec_cmd = [' '.join([pdftool, fp] + args)]
+	fptoolout = repext(fp, '.pdf')
+	efpo = jbu_expect(fptoolout)
+	#print exec_cmd
+	outs = exe_command(fp, exec_cmd, False, True)
+	shutil.copy(fptoolout, fpo)
+	fpo2 = [fpo, jbu_expect_check(efpo)]; tmp_files.append(fpo2);
+	if fpo2[1] == False:
+		print 'captured log of: [{}]'.format(exec_cmd)
+		print outs[0][0]; print outs[0][1];
+	return fpo2;
+def jbu_ps_to_pdf(args, tmp_files, fp):
+	fpo = jbu_gen_tmpfile(tmp_files, '.pdf');
+	pdftool = 'ps2pdf'
+	rem_arg_i = []
+	for i,arg in enumerate(args):
+		if arg.startswith('tool:'):
+			pdftool = arg[len('tool:'):]
+			rem_arg_i.append(i)
+	for arg_i in reversed(rem_arg_i):
+		args.pop(arg_i)
+	exec_cmd = [' '.join([pdftool, fp] + args)]
+	fptoolout = repext(fp, '.pdf')
+	efpo = jbu_expect(fptoolout)
+	#print exec_cmd
+	outs = exe_command(fp, exec_cmd, False, True)
+	shutil.copy(fptoolout, fpo)
+	fpo2 = [fpo, jbu_expect_check(efpo)]; tmp_files.append(fpo2);
+	if fpo2[1] == False:
+		print 'captured log of: [{}]'.format(exec_cmd)
+		print outs[0][0]; print outs[0][1];
+	return fpo2;
+def jbu_dvi_to_ps(args, tmp_files, fp):
+	fpo = jbu_gen_tmpfile(tmp_files, '.ps');
+	pdftool = 'dvips'
+	rem_arg_i = []
+	for i,arg in enumerate(args):
+		if arg.startswith('tool:'):
+			pdftool = arg[len('tool:'):]
+			rem_arg_i.append(i)
+	for arg_i in reversed(rem_arg_i):
+		args.pop(arg_i)
+	exec_cmd = [' '.join([pdftool, fp] + args)]
+	fptoolout = repext(fp, '.ps')
+	efpo = jbu_expect(fptoolout)
+	#print exec_cmd
+	outs = exe_command(fp, exec_cmd, False, True)
+	shutil.copy(fptoolout, fpo)
+	fpo2 = [fpo, jbu_expect_check(efpo)]; tmp_files.append(fpo2);
+	if fpo2[1] == False:
+		print 'captured log of: [{}]'.format(exec_cmd)
+		print outs[0][0]; print outs[0][1];
+	return fpo2;
+def jbu_tex_to_dvi(args, tmp_files, fp):
+	fpo = jbu_gen_tmpfile(tmp_files, '.dvi');
+	textool = jbu_extract_tex_tool(fp, ['%'], def_tool='latex')
+	rem_arg_i = []
+	for i,arg in enumerate(args):
+		if arg.startswith('tool:'):
+			textool = arg[len('tool:'):]
+			rem_arg_i.append(i)
+	for arg_i in reversed(rem_arg_i):
+		args.pop(arg_i)
+	exec_cmd = [' '.join([textool] + args + [fp])]
+	fptoolout = repext(fp, '.dvi')
+	efpo = jbu_expect(fptoolout)
+	# print exec_cmd
+	outs = exe_command(fp, exec_cmd, False, True)
+	shutil.copy(fptoolout, fpo)
+	fpo2 = [fpo, jbu_expect_check(efpo)]; tmp_files.append(fpo2);
+	if fpo2[1] == False:
+		print 'captured log of: [{}]'.format(exec_cmd)
+		print outs[0][0]; print outs[0][1];
+	return fpo2;
 def jbu_pdf_to_png(args, tmp_files, fp):
 	fpo = jbu_gen_tmpfile(tmp_files, '.png'); efpo = jbu_expect(fpo);
 	pngtool = 'convert'
-	exe_command(fp, [' '.join([pngtool, '-density', '300', '-alpha', 'remove', fp, fpo] + args)])
+	exec_cmd = [' '.join([pngtool, '-density', '300', '-alpha', 'remove', fp, fpo] + args)]
+	#print exec_cmd
+	exe_command(fp, exec_cmd)
 	fpo2 = [fpo, jbu_expect_check(efpo)]; tmp_files.append(fpo2); return fpo2;
 def jbu_pdf_to_jpeg(args, tmp_files, fp):
 	fpo = jbu_gen_tmpfile(tmp_files, '.jpeg'); efpo = jbu_expect(fpo);
@@ -326,7 +419,7 @@ def jbu_to_png(args, tmp_files, fgroups):
 			if fpok:
 				if fp.endswith('.png'):
 					fpo.append([fp, fpok])
-				if fp.endswith('.pdf'):
+				elif fp.endswith('.pdf'):
 					fpo.append(jbu_pdf_to_png(args, tmp_files, fp))
 			else:
 				fpo.append(['', False])
@@ -368,8 +461,46 @@ def jbu_to_pdf(args, tmp_files, fgroups):
 						fpo.append(['', False])
 				elif fp.endswith('.tex'):
 					fpo.append(jbu_tex_to_pdf(args, tmp_files, fp))
+				elif fp.endswith('.dvi'):
+					fpo.append(jbu_dvi_to_pdf(args, tmp_files, fp))
+				elif fp.endswith('.ps'):
+					fpo.append(jbu_ps_to_pdf(args, tmp_files, fp))
 				elif fp.endswith('.md'):
 					fpo.append(jbu_md_to_pdf(args, tmp_files, fp))
+			else:
+				fpo.append(['', False])
+		fgo.append(fpo)
+	return fgo
+def jbu_to_dvi(args, tmp_files, fgroups):
+	fgo = []
+	for files in fgroups:
+		fpo = []
+		for (fp, fpok) in files:
+			if fpok:
+				if fp.endswith('.dvi'):
+					fpo.append([fp, fpok])
+				elif fp.endswith('.jgr'):
+					(tex, texok) = jbu_jgr_to_tex(args, tmp_files, fp)
+					if texok:
+						fpo.append(jbu_tex_to_dvi(args, tmp_files, tex))
+					else:
+						fpo.append(['', False])
+				elif fp.endswith('.tex'):
+					fpo.append(jbu_tex_to_dvi(args, tmp_files, fp))
+			else:
+				fpo.append(['', False])
+		fgo.append(fpo)
+	return fgo
+def jbu_to_ps(args, tmp_files, fgroups):
+	fgo = []
+	for files in fgroups:
+		fpo = []
+		for (fp, fpok) in files:
+			if fpok:
+				if fp.endswith('.ps'):
+					fpo.append([fp, fpok])
+				elif fp.endswith('.dvi'):
+					fpo.append(jbu_dvi_to_ps(args, tmp_files, fp))
 			else:
 				fpo.append(['', False])
 		fgo.append(fpo)
@@ -459,8 +590,14 @@ def jbu_handle(cmd, ctx, fgroups):
 		return jbu_to_tex(args, ctx['tmp_files'], fgroups)
 	elif cmd.split()[0] == 'md':
 		return jbu_to_md(args, ctx['tmp_files'], fgroups)
+	elif cmd.split()[0] == 'latex':
+		return jbu_to_latex(args, ctx['tmp_files'], fgroups)
 	elif cmd.split()[0] == 'pdf':
 		return jbu_to_pdf(args, ctx['tmp_files'], fgroups)
+	elif cmd.split()[0] == 'dvi':
+		return jbu_to_dvi(args, ctx['tmp_files'], fgroups)
+	elif cmd.split()[0] == 'ps':
+		return jbu_to_ps(args, ctx['tmp_files'], fgroups)
 	elif cmd.split()[0] == 'png':
 		return jbu_to_png(args, ctx['tmp_files'], fgroups)
 	elif cmd.split()[0] == 'jpeg':
