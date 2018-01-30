@@ -177,10 +177,11 @@ def jbu_flatten_fgroups(fgroups):
 def jbu_gen_tmpfile(tmp_files, ext):
 	return fpjoinhere(['temp', '_tmp_{}{}'.format(len(tmp_files)+1, ext)])
 def do_handle(fp):
-	k_ext_handlers = {'.md': handle_md, '.tex': handle_tex, '.gv': handle_graphviz
+	k_ext_handlers = {'.md': handle_md, '.tex': handle_tex
+		, '.gv': handle_graphviz, '.dot': handle_graphviz
 		, '.py': handle_python, '.sh': handle_shell, '.mako': handle_mako
-		, '.jgr': handle_jgr, '.jbu': handle_jbu, '.lzt': handle_lzt,
-		'.frt': handle_frt, '.multi': handle_multi}
+		, '.jgr': handle_jgr, '.jbu': handle_jbu, '.lzt': handle_lzt
+		, '.frt': handle_frt, '.multi': handle_multi}
 	(fn,fe) = os.path.splitext(sys.argv[1])
 	if g_dbg:
 		print 'fp,(fn,fe) = ', fp,(fn,fe)
@@ -344,6 +345,11 @@ def jbu_md_to_tex(args, tmp_files, fp):
 	mdtool = 'pandoc'
 	exe_command(fp, [' '.join([mdtool, fp, '-o', fpo] + args)])
 	fpo2 = [fpo, jbu_expect_check(efpo)]; tmp_files.append(fpo2); return fpo2;
+def jbu_dot_to_tex(args, tmp_files, fp):
+	fpo = jbu_gen_tmpfile(tmp_files, '.tex'); efpo = jbu_expect(fpo);
+	dottool = 'dot2tex'
+	exe_command(fp, [' '.join([dottool, fp, '-o', fpo] + args)])
+	fpo2 = [fpo, jbu_expect_check(efpo)]; tmp_files.append(fpo2); return fpo2;
 def jbu_lzt_to_md(args, tmp_files, fp):
 	fpo = jbu_gen_tmpfile(tmp_files, '.md'); efpo = jbu_expect(fpo);
 	mdtool = fpjoinhere(['lztex'])
@@ -467,6 +473,12 @@ def jbu_to_pdf(args, tmp_files, fgroups):
 					fpo.append(jbu_ps_to_pdf(args, tmp_files, fp))
 				elif fp.endswith('.md'):
 					fpo.append(jbu_md_to_pdf(args, tmp_files, fp))
+				elif fp.endswith('.dot'):
+					(tex, texok) = jbu_dot_to_tex(args, tmp_files, fp)
+					if texok:
+						fpo.append(jbu_tex_to_pdf(args, tmp_files, tex))
+					else:
+						fpo.append(['', False])
 			else:
 				fpo.append(['', False])
 		fgo.append(fpo)
@@ -583,6 +595,7 @@ def jbu_dict(args, ctx, fgroups):
 	ctx['file_dict'][args[0]] = fgroups
 	return fgroups
 def jbu_handle(cmd, ctx, fgroups):
+	global g_dbgexec
 	args = cmd.split()[1:]
 	if cmd.strip() == '':
 		return fgroups
